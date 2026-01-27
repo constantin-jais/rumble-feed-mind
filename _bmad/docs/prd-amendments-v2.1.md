@@ -894,4 +894,665 @@ V2 - Collaboration (inchangé mais préparé)
 
 ---
 
-**Status du PRD après amendements : v2.1 - READY FOR IMPLEMENTATION**
+---
+
+## AMD-014 : Scope V1 Révisé (Web-Only)
+
+### Problème identifié
+
+Le scope V1 actuel (Web + Mobile Expo + Admin + IA complète + Explicabilité) est irréaliste pour 12 semaines avec 1-2 développeurs. Risque de délai 16-20 semaines et burnout équipe.
+
+### Solution : MVP V1 Web-Only
+
+**Principe** : Livrer un MVP fonctionnel et stable plutôt qu'un produit incomplet sur toutes les plateformes.
+
+#### Scope V1 Révisé (10 semaines)
+
+```
+✅ INCLUS DANS V1
+─────────────────────────────────────────────────────────────────
+• Web Next.js (pas Expo Web)
+• Import/Export OPML
+• Gestion flux et dossiers
+• Règles regex uniquement
+• Lecture articles (Readability)
+• Recherche basique (titre, source, tags) - AMD-002
+• Flux prioritaires (Hot/Warm/Cold) - AMD-006
+• Login/signup simple (email + password)
+• BYOK config (UI prête, IA désactivée ou mode basique)
+• Dark mode
+• Raccourcis clavier (j/k, m, s, etc.)
+
+❌ DÉPLACÉ VERS V1.1
+─────────────────────────────────────────────────────────────────
+• Mobile Expo (iOS/Android)
+• Admin dashboard
+• Règles IA complètes (langage naturel)
+• Explicabilité IA (raisons détaillées)
+• Full-text search (contenu)
+• Managed IA - déjà en V1.1 (AMD-005)
+• OAuth (GitHub, Google)
+
+❌ RESTE EN V2
+─────────────────────────────────────────────────────────────────
+• Collaboration équipe
+• Flux partagés
+• Webhooks
+• API publique
+```
+
+#### Timeline Révisée
+
+| Phase | Semaines | Contenu |
+|-------|----------|---------|
+| **Phase 0** | S1-S2 | Validation marché (voir AMD-015) |
+| **Phase 1** | S3-S12 | MVP Web-Only |
+| **Phase 2** | S13-S14 | Beta externe (20-50 users) |
+| **Phase 3** | S15+ | V1.1 (Mobile, IA, Admin) |
+
+#### Justification
+
+1. **Next.js vs Expo Web** : Next.js est mature et performant pour apps lecture-intensive. Expo Web ajoute un risque non-nécessaire pour V1.
+2. **IA en V1.1** : Le différenciateur principal peut attendre 4-6 semaines. Les règles regex suffisent pour valider le core product.
+3. **Mobile en V1.1** : Les power users (cible V1) utilisent principalement desktop.
+
+#### Impact sur FRs
+
+```diff
+FR-MOBILE-* → Déplacés vers V1.1
+FR-RULE-AI-* → Déplacés vers V1.1 (sauf config BYOK UI)
+FR-ADMIN-* → Déplacés vers V1.1
+FR-EXPLAIN-* → Déplacés vers V1.1
+```
+
+#### Critères de succès V1 révisés
+
+| Métrique | Target V1 | Mesure |
+|----------|-----------|--------|
+| **Build fonctionnel** | 100% features V1 | Checklist |
+| **Dogfooding** | 5/5 users actifs quotidiennement | Logs |
+| **Performance** | p95 < 200ms | Prometheus |
+| **Uptime** | > 99% | Monitoring |
+| **Import OPML 1000 flux** | < 2 minutes | Test manuel |
+
+---
+
+## AMD-015 : Phase 0 Validation Marché
+
+### Problème identifié
+
+Le dogfooding avec 5 utilisateurs internes ne valide pas le product-market fit. Risque de construire un produit que personne n'achète.
+
+### Solution : Phase de validation avant développement
+
+#### Phase 0 (2 semaines)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PHASE 0 : VALIDATION                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  SEMAINE 1 : RECHERCHE                                         │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  □ User Interviews (10 power users RSS)                        │
+│    ├── 5 utilisateurs Inoreader                                │
+│    ├── 3 utilisateurs Feedly                                   │
+│    └── 2 utilisateurs Miniflux/self-hosted                     │
+│                                                                 │
+│  Questions clés :                                               │
+│    • Combien de temps passez-vous à trier vos articles ?       │
+│    • Quelles règles avez-vous créées ? Limites rencontrées ?   │
+│    • Payeriez-vous 5€/mois pour des règles IA ?                │
+│    • Qu'est-ce qui vous ferait quitter Inoreader/Feedly ?      │
+│                                                                 │
+│  □ Étude TAM (Total Addressable Market)                        │
+│    ├── Combien de power users RSS en 2026 ?                    │
+│    ├── Tendance : croissance ou déclin ?                       │
+│    └── Segments : dev, analystes, journalistes, autres ?       │
+│                                                                 │
+│  □ Competitive Analysis                                         │
+│    ├── Feedly AI features actuelles                            │
+│    ├── Inoreader roadmap publique                              │
+│    └── Timeline estimée si Inoreader copie l'IA                │
+│                                                                 │
+│  SEMAINE 2 : DÉCISION                                          │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  □ Financial Model                                              │
+│    ├── CAC estimé (coût acquisition client)                    │
+│    ├── CLV estimé (lifetime value)                             │
+│    ├── Break-even : combien de users ?                         │
+│    └── Projection Y1, Y2, Y3                                   │
+│                                                                 │
+│  □ Benchmark Expo Web (optionnel, peut être fait en S3)        │
+│    ├── Prototype 1000 articles                                 │
+│    ├── Mesurer : bundle, TTI, scroll FPS                       │
+│    └── Décision : Expo Web vs Next.js                          │
+│                                                                 │
+│  □ Decision Point : GO / PIVOT / STOP                          │
+│                                                                 │
+│  GO si :                                                        │
+│    ✓ 7/10 interviewés paieraient 5€/mois pour règles IA       │
+│    ✓ TAM > 50k power users RSS actifs                          │
+│    ✓ CAC < CLV avec marge > 50%                                │
+│    ✓ Pas de signal imminent de copie par Inoreader             │
+│                                                                 │
+│  PIVOT si :                                                     │
+│    ⚠️ Intérêt mais pricing trop bas (tester 10€/mois ?)        │
+│    ⚠️ TAM B2C limité mais B2B intéressant (équipes veille)     │
+│                                                                 │
+│  STOP si :                                                      │
+│    ✗ < 3/10 paieraient (pas de demande)                        │
+│    ✗ Inoreader annonce feature similaire                       │
+│    ✗ CAC > CLV (business non-viable)                           │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Livrables Phase 0
+
+| Livrable | Format | Objectif |
+|----------|--------|----------|
+| **Interview Notes** | Google Doc | Insights qualitatives |
+| **TAM Analysis** | Spreadsheet | Taille marché estimée |
+| **Competitive Brief** | 2 pages | Risques concurrence |
+| **Financial Model** | Spreadsheet | CAC/CLV/break-even |
+| **Go/Pivot/Stop Decision** | 1 page memo | Décision documentée |
+
+#### Impact Timeline
+
+```
+AVANT (v2.0)
+─────────────────────────────────────────────────────────────────
+S1 ────────────────────────────────────────────────────────► S12
+        MVP Development (12 semaines)
+
+APRÈS (v2.1)
+─────────────────────────────────────────────────────────────────
+S1 ─► S2     S3 ──────────────────────────────────────────► S12
+Phase 0      MVP Development (10 semaines)
+Validation
+```
+
+---
+
+## AMD-016 : Stratégie Go-To-Market
+
+### Problème identifié
+
+Aucune stratégie d'acquisition au-delà de "post sur Hacker News". Risque de rester à 5 utilisateurs indéfiniment.
+
+### Solution : Plan GTM structuré
+
+#### Stratégie d'Acquisition
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    GO-TO-MARKET STRATEGY                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  PHASE 1 : BETA PRIVÉE (S13-S14)                               │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Objectif : 20-50 utilisateurs externes                        │
+│                                                                 │
+│  Sources :                                                      │
+│  ├── Twitter/X (RSS enthusiasts)                               │
+│  ├── Mastodon (tech community)                                 │
+│  ├── r/rss subreddit                                           │
+│  ├── Indie Hackers                                             │
+│  └── Network personnel                                         │
+│                                                                 │
+│  Messaging :                                                    │
+│  "Looking for power RSS users to test an open-source          │
+│   reader with AI-powered natural language filtering.           │
+│   Free beta access + influence on roadmap."                    │
+│                                                                 │
+│  Success criteria :                                             │
+│  ├── Churn < 5%/semaine                                        │
+│  ├── NPS > 30                                                  │
+│  └── Feature requests documentés                               │
+│                                                                 │
+│  PHASE 2 : LAUNCH PUBLIC (S15+)                                │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Day 1 : Hacker News + Product Hunt (simultané)                │
+│  ├── HN : "Show HN: FeedMind - RSS reader with AI rules"       │
+│  ├── PH : Launch avec screenshots, démo vidéo                  │
+│  └── Twitter thread explicatif                                 │
+│                                                                 │
+│  Week 1+ : Content Marketing                                   │
+│  ├── Blog post : "Why I built an AI-powered RSS reader"       │
+│  ├── Blog post : "10 advanced RSS filtering rules"            │
+│  ├── Blog post : "BYOK: Why we don't charge for AI"           │
+│  └── YouTube : Demo walkthrough (5 min)                        │
+│                                                                 │
+│  Ongoing : Community Building                                   │
+│  ├── Discord server (support + feedback)                       │
+│  ├── GitHub Discussions (features, bugs)                       │
+│  ├── Changelog public (nouvelles features)                     │
+│  └── Newsletter mensuelle                                      │
+│                                                                 │
+│  CANAUX PRIORITAIRES                                            │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Tier 1 (Focus principal) :                                    │
+│  ├── Hacker News                                               │
+│  ├── Reddit (r/rss, r/selfhosted, r/productivity)             │
+│  └── Twitter/X tech community                                  │
+│                                                                 │
+│  Tier 2 (Secondaire) :                                         │
+│  ├── Product Hunt                                              │
+│  ├── Indie Hackers                                             │
+│  ├── Dev.to / Hashnode                                         │
+│  └── Mastodon / Fediverse                                      │
+│                                                                 │
+│  Tier 3 (Si budget) :                                          │
+│  ├── Sponsoring newsletters tech                               │
+│  ├── YouTube sponsoring (tech reviewers)                       │
+│  └── Google Ads (keywords RSS)                                 │
+│                                                                 │
+│  BUDGET MARKETING                                               │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Phase 1-2 : 0€ (organic only)                                 │
+│  Phase 3+ : 100-500€/mois si CAC < CLV                         │
+│                                                                 │
+│  Channels payants envisageables :                               │
+│  ├── Newsletter sponsoring : 50-200€/insertion                 │
+│  ├── Google Ads : 0.50-2€/clic                                 │
+│  └── Twitter Ads : 1-3€/engagement                             │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Métriques GTM
+
+| Métrique | Target S15 | Target S20 | Target S30 |
+|----------|------------|------------|------------|
+| **Signups** | 100 | 500 | 2000 |
+| **DAU** | 30 | 150 | 500 |
+| **Pro conversions** | 5 | 50 | 200 |
+| **MRR** | 25€ | 250€ | 1000€ |
+| **Churn mensuel** | < 10% | < 8% | < 5% |
+
+#### Content Calendar (Mois 1)
+
+| Semaine | Content | Channel |
+|---------|---------|---------|
+| S15 | Launch post + demo video | HN, PH, Twitter |
+| S16 | "Why I built FeedMind" | Blog, HN |
+| S17 | "10 Advanced RSS Rules" | Blog, Reddit |
+| S18 | Tutorial video | YouTube, Twitter |
+
+---
+
+## AMD-017 : Free Tier Révisé (100 flux)
+
+### Problème identifié
+
+Le Free tier actuel (25 flux) empêche les power users (800+ flux) de tester FeedMind. Ils ne peuvent même pas importer une fraction significative de leurs flux pour évaluer le produit.
+
+### Solution : Free tier plus généreux
+
+#### Comparaison
+
+| Limite | AVANT (v2.0) | APRÈS (v2.1) | Justification |
+|--------|--------------|--------------|---------------|
+| **Flux** | 25 | 100 | Permet test réel par power users |
+| **Articles stockés** | 500 | 2000 | 20 articles × 100 flux = raisonnable |
+| **Règles regex** | 3 | 10 | Permet tester la feature sérieusement |
+| **Tags** | 10 | 20 | Organisation minimale |
+| **Cache images** | 24h | 24h | Inchangé |
+
+#### Impact Coûts
+
+```
+AVANT (25 flux Free)
+─────────────────────────────────────────────────────────────────
+• Storage : 25 flux × 20 articles × 10KB = 5MB/user
+• Si 1000 Free users : 5GB stockage
+• Coût : ~0.05€/mois
+
+APRÈS (100 flux Free)
+─────────────────────────────────────────────────────────────────
+• Storage : 100 flux × 20 articles × 10KB = 20MB/user
+• Si 1000 Free users : 20GB stockage
+• Coût : ~0.20€/mois
+
+Delta : +0.15€/mois pour 1000 users = négligeable
+```
+
+#### Expérience utilisateur
+
+```
+BEFORE : Thomas (800 flux) arrive
+─────────────────────────────────────────────────────────────────
+1. Crée compte Free
+2. Tente import OPML (800 flux)
+3. "Erreur : limite 25 flux dépassée"
+4. Abandonne, retourne sur Inoreader
+
+AFTER : Thomas (800 flux) arrive
+─────────────────────────────────────────────────────────────────
+1. Crée compte Free
+2. Import OPML → "100 flux importés sur 800"
+3. Teste pendant 3 jours avec ses flux principaux
+4. Convaincu → upgrade Pro Trial pour import complet
+```
+
+#### Alternative considérée
+
+**Option B : Import illimité pendant 7 jours**
+- Pro : Power users peuvent tout tester
+- Con : 7 jours trop court pour évaluer vraiment
+- Con : Complexité UI (timer, downgrade, etc.)
+
+**Décision** : Free 100 flux (option retenue) - plus simple et suffisant.
+
+#### FRs impactés
+
+```diff
+- FR-TIER-FREE : 25 flux, 500 articles, 3 règles
++ FR-TIER-FREE : 100 flux, 2000 articles, 10 règles
+```
+
+---
+
+## AMD-018 : Métriques Succès Détaillées
+
+### Problème identifié
+
+Les métriques actuelles ("5/5 DAU") ne mesurent pas la satisfaction ni la rétention. Impossible de savoir si le produit résout vraiment le problème.
+
+### Solution : Framework de métriques complet
+
+#### Métriques V1 Révisées
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SUCCESS METRICS V1                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ENGAGEMENT (Le produit est-il utilisé ?)                      │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Métrique         │ Target   │ Red Flag │ Mesure               │
+│  ─────────────────┼──────────┼──────────┼────────────────────  │
+│  DAU/MAU ratio    │ > 40%    │ < 20%    │ Analytics            │
+│  Sessions/jour    │ ≥ 2      │ < 1      │ Analytics            │
+│  Articles lus/j   │ ≥ 20     │ < 5      │ DB query             │
+│  Durée session    │ > 15min  │ < 5min   │ Analytics            │
+│                                                                 │
+│  SATISFACTION (Le produit résout-il le problème ?)             │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Métrique         │ Target   │ Red Flag │ Mesure               │
+│  ─────────────────┼──────────┼──────────┼────────────────────  │
+│  NPS              │ > 50     │ < 20     │ Survey in-app        │
+│  Recommandation   │ > 80%    │ < 50%    │ Survey               │
+│  Support tickets  │ < 5/mois │ > 20     │ Zendesk/Discord      │
+│  Feature requests │ > 10     │ < 3      │ GitHub issues        │
+│                                                                 │
+│  RÉTENTION (Les users reviennent-ils ?)                        │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Métrique         │ Target   │ Red Flag │ Mesure               │
+│  ─────────────────┼──────────┼──────────┼────────────────────  │
+│  D1 retention     │ > 80%    │ < 50%    │ Cohort analysis      │
+│  D7 retention     │ > 60%    │ < 30%    │ Cohort analysis      │
+│  D30 retention    │ > 40%    │ < 20%    │ Cohort analysis      │
+│  Churn mensuel    │ < 5%     │ > 15%    │ Subscription data    │
+│                                                                 │
+│  ADOPTION FEATURES (Les features clés sont-elles utilisées ?)  │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Métrique         │ Target   │ Red Flag │ Mesure               │
+│  ─────────────────┼──────────┼──────────┼────────────────────  │
+│  Règles créées    │ ≥ 5/user │ < 2      │ DB query             │
+│  Flux prioritaires│ ≥ 10/usr │ < 3      │ DB query             │
+│  Recherche usage  │ > 50%    │ < 10%    │ Analytics            │
+│  Raccourcis kbd   │ > 30%    │ < 5%     │ Analytics            │
+│                                                                 │
+│  PERFORMANCE (Le système est-il fiable ?)                      │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Métrique         │ Target   │ Red Flag │ Mesure               │
+│  ─────────────────┼──────────┼──────────┼────────────────────  │
+│  API p95 latency  │ < 200ms  │ > 500ms  │ Prometheus           │
+│  Uptime           │ > 99.5%  │ < 99%    │ Monitoring           │
+│  Error rate       │ < 1%     │ > 5%     │ Logs                 │
+│  Feed refresh     │ < 5min   │ > 15min  │ Job metrics          │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Métriques IA (V1.1+)
+
+| Métrique | Target | Red Flag | Mesure |
+|----------|--------|----------|--------|
+| **Précision règles IA** | > 85% | < 70% | Feedback "correct/incorrect" |
+| **Faux positifs** | < 15% | > 30% | Articles restaurés / masqués |
+| **Temps évaluation** | < 5s/batch | > 15s | Job metrics |
+| **Adoption IA** | > 60% Pro | < 30% | DB query |
+
+#### Dashboard Metrics
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  📊 FeedMind Metrics Dashboard                                  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  TODAY                          THIS WEEK                       │
+│  ───────────────────────────    ───────────────────────────    │
+│  DAU: 5/5 ✅                    NPS: 62 ✅                      │
+│  Sessions: 12                   Retention D7: 100% ✅           │
+│  Articles read: 156             New rules: 23                   │
+│  Avg session: 24min ✅          Support tickets: 2 ✅           │
+│                                                                 │
+│  PERFORMANCE                    HEALTH                          │
+│  ───────────────────────────    ───────────────────────────    │
+│  API p95: 145ms ✅              Uptime: 99.8% ✅                │
+│  Feed refresh: 3.2min ✅        Error rate: 0.3% ✅             │
+│  DB connections: 12/50          Redis memory: 45%               │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Survey NPS (in-app, après 7 jours)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  How likely are you to recommend FeedMind to a colleague?       │
+│                                                                 │
+│  0   1   2   3   4   5   6   7   8   9   10                    │
+│  ○   ○   ○   ○   ○   ○   ○   ○   ○   ○   ○                     │
+│  ├───────────────┼───────────────┼───────────────┤              │
+│  Not at all      Neutral         Extremely                      │
+│                                                                 │
+│  [Skip] [Submit]                                                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## AMD-019 : KMS Obligatoire pour Secrets
+
+### Problème identifié
+
+AMD-004 décrit le chiffrement des secrets mais laisse la master key en env var Clever Cloud. C'est un single point of failure : si la master key fuite, tous les secrets sont compromis.
+
+### Solution : KMS obligatoire
+
+#### Architecture Secrets Révisée
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    SECRETS ARCHITECTURE v2                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  AVANT (AMD-004) - INSUFFISANT                                 │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Environment Variables (Clever Cloud)                          │
+│  └── MASTER_KEY_V1=base64(...)  ← Risque : leak = game over    │
+│                                                                 │
+│  APRÈS (AMD-019) - RECOMMANDÉ                                  │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Option A : HashiCorp Vault (Self-hosted)                      │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  Vault Server (separate VM)                             │   │
+│  │  ├── Master key stored in Vault                         │   │
+│  │  ├── Auto-unseal with cloud KMS                         │   │
+│  │  ├── Audit logging enabled                              │   │
+│  │  └── Access policies per service                        │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                        │                                        │
+│                        ▼                                        │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  FeedMind API                                           │   │
+│  │  ├── Request master key from Vault on startup           │   │
+│  │  ├── Cache in memory (never disk)                       │   │
+│  │  ├── Refresh every 1h                                   │   │
+│  │  └── Graceful degradation if Vault unavailable          │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Option B : Clever Cloud Vault (Managed)                       │
+│  ─────────────────────────────────────────────────────────────  │
+│  Si Clever Cloud propose un service Vault/KMS :                │
+│  • Utiliser directement                                        │
+│  • Moins d'infra à gérer                                       │
+│  • Vérifier compliance RGPD                                    │
+│                                                                 │
+│  Option C : Minimum Viable Security (V1 only)                  │
+│  ─────────────────────────────────────────────────────────────  │
+│  Si KMS impossible pour V1 :                                   │
+│  1. Master key en env var (comme AMD-004)                      │
+│  2. MAIS : audit trail obligatoire                             │
+│  3. ET : incident playbook testé                               │
+│  4. ET : migration vers KMS planifiée pour V1.1                │
+│                                                                 │
+│  EXIGENCES NON-NÉGOCIABLES                                     │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                 │
+│  Quelle que soit l'option :                                    │
+│  ✓ Master key jamais en code source                            │
+│  ✓ Master key jamais loggée                                    │
+│  ✓ Rotation possible sans downtime                             │
+│  ✓ Audit trail de tous les accès                               │
+│  ✓ Incident playbook documenté et testé                        │
+│  ✓ Backup offline (papier) de la master key                    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Incident Playbook : Master Key Compromised
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  🚨 INCIDENT : MASTER KEY COMPROMISED                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  DÉTECTION                                                      │
+│  ─────────────────────────────────────────────────────────────  │
+│  • Alerte : accès non-autorisé au KMS/Vault                    │
+│  • Alerte : env var exposée dans logs/repo                     │
+│  • Rapport : utilisateur signale activité suspecte             │
+│                                                                 │
+│  RÉPONSE IMMÉDIATE (< 15 minutes)                              │
+│  ─────────────────────────────────────────────────────────────  │
+│  1. □ Confirmer la compromission (pas de faux positif)         │
+│  2. □ Générer nouvelle master key (MASTER_KEY_V2)              │
+│  3. □ Déployer nouvelle key en production                      │
+│  4. □ Révoquer ancienne key du KMS/env vars                    │
+│                                                                 │
+│  MITIGATION (< 1 heure)                                        │
+│  ─────────────────────────────────────────────────────────────  │
+│  5. □ Re-chiffrer toutes les clés API utilisateurs             │
+│       (batch job avec nouvelle master key)                     │
+│  6. □ Invalider toutes les sessions actives                    │
+│  7. □ Forcer re-authentification de tous les users             │
+│                                                                 │
+│  COMMUNICATION (< 2 heures)                                    │
+│  ─────────────────────────────────────────────────────────────  │
+│  8. □ Email à tous les utilisateurs :                          │
+│       "Security incident - please rotate your API keys"        │
+│  9. □ Blog post / status page update                           │
+│  10.□ Si RGPD applicable : notifier CNIL (72h)                 │
+│                                                                 │
+│  POST-INCIDENT (< 1 semaine)                                   │
+│  ─────────────────────────────────────────────────────────────  │
+│  11.□ Root cause analysis (comment c'est arrivé)               │
+│  12.□ Mesures préventives (comment éviter)                     │
+│  13.□ Mise à jour du playbook si nécessaire                    │
+│  14.□ Communication finale aux utilisateurs                    │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Impact sur Constitution
+
+```diff
+Article 8: Sécurité
++ | Master key storage | KMS obligatoire (Vault/Cloud KMS) |
++ | Si KMS impossible V1 | Env var + audit trail + playbook |
++ | Audit trail | Tous les decrypt loggés (tamper-evident) |
++ | Incident playbook | Documenté, testé trimestriellement |
+```
+
+#### Timeline KMS
+
+| Phase | Action | Deadline |
+|-------|--------|----------|
+| **V1** | Env var + audit trail + playbook testé | M1 |
+| **V1.1** | Migration vers HashiCorp Vault | M3 |
+| **V2** | Vault HA (haute disponibilité) | M6 |
+
+---
+
+## Résumé des Amendements v2.1 (mise à jour)
+
+### Nouveaux Amendements
+
+| ID | Catégorie | Priorité | Description |
+|----|-----------|----------|-------------|
+| AMD-014 | Scope | MUST-FIX | Scope V1 révisé (Web-only, 10 semaines) |
+| AMD-015 | Process | MUST-FIX | Phase 0 validation marché (2 semaines) |
+| AMD-016 | Business | SHOULD-FIX | Stratégie Go-To-Market |
+| AMD-017 | Business | MUST-FIX | Free tier révisé (100 flux) |
+| AMD-018 | Metrics | SHOULD-FIX | Métriques succès détaillées |
+| AMD-019 | Sécurité | MUST-FIX | KMS obligatoire pour secrets |
+
+### Roadmap Finale
+
+```
+PHASE 0 (S1-S2) : Validation Marché
+├── User interviews (10)
+├── TAM analysis
+├── Financial model
+└── Go/Pivot/Stop decision
+
+PHASE 1 (S3-S12) : MVP Web-Only
+├── Core features
+├── Règles regex
+├── Free tier 100 flux
+└── Dogfooding 5 users
+
+PHASE 2 (S13-S14) : Beta Externe
+├── 20-50 beta testers
+├── Mesurer NPS, retention
+└── Itérer selon feedback
+
+PHASE 3 (S15+) : V1.1 + Launch
+├── Mobile (Expo iOS/Android)
+├── Règles IA + explicabilité
+├── KMS (HashiCorp Vault)
+├── Launch public (HN, PH)
+└── Content marketing
+```
+
+---
+
+**Status du PRD après amendements : v2.1.1 - READY FOR PHASE 0 VALIDATION**

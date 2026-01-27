@@ -93,9 +93,25 @@ _bmad/          → Documentation BMAD (PRD, architecture)
 |-------|-------------|
 | Secrets | Jamais en code, toujours env vars |
 | User data | Isolation stricte par tenant |
-| API keys IA | Chiffrées at-rest si stockées |
+| API keys IA | Chiffrées at-rest si stockées (AES-256-GCM) |
 | CORS | Whitelist strict en prod |
 | Rate limiting | Par user et par endpoint |
+
+### 8.1 Gestion des Master Keys (AMD-019)
+
+| Règle | V1 | V1.1+ |
+|-------|-----|-------|
+| **Stockage master key** | Env var + audit trail | KMS obligatoire (Vault) |
+| **Rotation** | Possible sans downtime | Automatique (90 jours) |
+| **Audit trail** | Tous les decrypt loggés | Tamper-evident logs |
+| **Incident playbook** | Documenté et testé | Testé trimestriellement |
+| **Backup** | Offline (papier, coffre) | Multi-site encrypted |
+
+**Exigences non-négociables** :
+- Master key **jamais** en code source
+- Master key **jamais** loggée
+- Per-user key derivation via HKDF
+- Incident playbook testé avant production
 
 ---
 
