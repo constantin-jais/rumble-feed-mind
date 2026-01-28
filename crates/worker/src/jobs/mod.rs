@@ -69,6 +69,20 @@ pub enum JobType {
 
     /// Send email notification
     SendEmail { to: String, template: EmailTemplate },
+
+    // ========================================================================
+    // BILLING JOBS
+    // ========================================================================
+
+    /// Check dunning status for all accounts in grace period (scheduled job)
+    /// Runs daily to downgrade or suspend accounts
+    CheckDunningStatus,
+
+    /// Sync usage records to Stripe for metered billing
+    SyncUsageToStripe { user_id: Uuid },
+
+    /// Clean up old webhook events (> 30 days)
+    CleanupWebhookEvents,
 }
 
 /// Email templates
@@ -83,6 +97,28 @@ pub enum EmailTemplate {
 
     /// Export ready notification
     ExportReady { download_url: String },
+
+    // ========================================================================
+    // DUNNING EMAIL TEMPLATES
+    // ========================================================================
+
+    /// Payment failed - first notification (day 1)
+    PaymentFailedDay1 { user_id: Uuid, amount: i64, currency: String },
+
+    /// Payment failed - reminder (day 3)
+    PaymentFailedDay3 { user_id: Uuid, amount: i64, currency: String },
+
+    /// Payment failed - final warning before downgrade (day 7)
+    PaymentFailedDay7 { user_id: Uuid, amount: i64, currency: String },
+
+    /// Account downgraded to free due to non-payment
+    AccountDowngraded { user_id: Uuid, previous_plan: String },
+
+    /// Account suspended due to extended non-payment (day 30)
+    AccountSuspended { user_id: Uuid },
+
+    /// Payment recovered - account restored
+    PaymentRecovered { user_id: Uuid, plan: String },
 }
 
 /// Job priority levels
@@ -113,6 +149,9 @@ impl JobType {
             JobType::ExportUserData { .. } => JobPriority::Normal,
             JobType::DeleteUserData { .. } => JobPriority::High,
             JobType::SendEmail { .. } => JobPriority::Normal,
+            JobType::CheckDunningStatus => JobPriority::Normal,
+            JobType::SyncUsageToStripe { .. } => JobPriority::Low,
+            JobType::CleanupWebhookEvents => JobPriority::Low,
         }
     }
 
@@ -126,6 +165,9 @@ impl JobType {
             JobType::ExportUserData { .. } => "feedmind:jobs:exports",
             JobType::DeleteUserData { .. } => "feedmind:jobs:exports",
             JobType::SendEmail { .. } => "feedmind:jobs:notifications",
+            JobType::CheckDunningStatus => "feedmind:jobs:billing",
+            JobType::SyncUsageToStripe { .. } => "feedmind:jobs:billing",
+            JobType::CleanupWebhookEvents => "feedmind:jobs:scheduled",
         }
     }
 }

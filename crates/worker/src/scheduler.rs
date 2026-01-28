@@ -35,6 +35,12 @@ impl Scheduler {
         // Schedule cleanup daily at 3 AM
         self.schedule_cleanup().await?;
 
+        // Schedule dunning check daily at 6 AM
+        self.schedule_dunning_check().await?;
+
+        // Schedule webhook cleanup weekly on Sunday at 4 AM
+        self.schedule_webhook_cleanup().await?;
+
         // Start the scheduler
         self.cron.start().await?;
 
@@ -82,6 +88,46 @@ impl Scheduler {
         Ok(())
     }
 
+    /// Schedule daily dunning check
+    async fn schedule_dunning_check(&self) -> anyhow::Result<()> {
+        let redis_url = self.redis_url.clone();
+
+        // Every day at 6:00 AM
+        let job = CronJob::new_async("0 0 6 * * *", move |_uuid, _lock| {
+            let redis_url = redis_url.clone();
+            Box::pin(async move {
+                if let Err(e) = enqueue_dunning_check(&redis_url).await {
+                    error!(error = %e, "Failed to enqueue dunning check");
+                }
+            })
+        })?;
+
+        self.cron.add(job).await?;
+        info!("Scheduled dunning check daily at 6:00 AM");
+
+        Ok(())
+    }
+
+    /// Schedule weekly webhook cleanup
+    async fn schedule_webhook_cleanup(&self) -> anyhow::Result<()> {
+        let redis_url = self.redis_url.clone();
+
+        // Every Sunday at 4:00 AM
+        let job = CronJob::new_async("0 0 4 * * 0", move |_uuid, _lock| {
+            let redis_url = redis_url.clone();
+            Box::pin(async move {
+                if let Err(e) = enqueue_webhook_cleanup(&redis_url).await {
+                    error!(error = %e, "Failed to enqueue webhook cleanup");
+                }
+            })
+        })?;
+
+        self.cron.add(job).await?;
+        info!("Scheduled webhook cleanup weekly on Sunday at 4:00 AM");
+
+        Ok(())
+    }
+
     /// Shutdown the scheduler gracefully
     pub async fn shutdown(&mut self) -> anyhow::Result<()> {
         info!("Shutting down scheduler");
@@ -113,6 +159,24 @@ async fn connect_redis(redis_url: &str) -> anyhow::Result<ConnectionManager> {
     let client = redis::Client::open(redis_url)?;
     let conn = ConnectionManager::new(client).await?;
     Ok(conn)
+}
+
+/// Enqueue a dunning check job
+async fn enqueue_dunning_check(redis_url: &str) -> anyhow::Result<()> {
+    let mut redis = connect_redis(redis_url).await?;
+    let job = Job::new(JobType::CheckDunningStatus);
+    enqueue_job(&mut redis, &job).await?;
+    info!("Enqueued CheckDunningStatus job");
+    Ok(())
+}
+
+/// Enqueue a webhook cleanup job
+async fn enqueue_webhook_cleanup(redis_url: &str) -> anyhow::Result<()> {
+    let mut redis = connect_redis(redis_url).await?;
+    let job = Job::new(JobType::CleanupWebhookEvents);
+    enqueue_job(&mut redis, &job).await?;
+    info!("Enqueued CleanupWebhookEvents job");
+    Ok(())
 }
 
 #[cfg(test)]

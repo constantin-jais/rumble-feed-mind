@@ -82,6 +82,9 @@ regex = "1.11"
 # Cron scheduler
 tokio-cron-scheduler = "0.13"
 
+# Stripe payments
+stripe = { package = "async-stripe", version = "0.39", features = ["runtime-tokio-hyper"] }
+
 # Internal crates
 feedmind-core = { path = "crates/core" }
 

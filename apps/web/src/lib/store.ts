@@ -187,6 +187,12 @@ interface UIState {
   articleFilter: "all" | "unread" | "starred";
   setArticleFilter: (filter: "all" | "unread" | "starred") => void;
 
+  // Category filter
+  selectedCategories: string[];
+  setSelectedCategories: (categories: string[]) => void;
+  toggleCategory: (category: string) => void;
+  clearCategories: () => void;
+
   // Theme
   theme: "light" | "dark" | "system";
   setTheme: (theme: "light" | "dark" | "system") => void;
@@ -203,9 +209,9 @@ export const useUIStore = create<UIState>()(
       selectedFolderId: null,
       selectedArticleId: null,
       setSelectedFeed: (id) =>
-        set({ selectedFeedId: id, selectedFolderId: null }),
+        set({ selectedFeedId: id, selectedFolderId: null, selectedCategories: [] }),
       setSelectedFolder: (id) =>
-        set({ selectedFolderId: id, selectedFeedId: null }),
+        set({ selectedFolderId: id, selectedFeedId: null, selectedCategories: [] }),
       setSelectedArticle: (id) => set({ selectedArticleId: id }),
 
       viewMode: "list",
@@ -213,6 +219,16 @@ export const useUIStore = create<UIState>()(
 
       articleFilter: "unread",
       setArticleFilter: (filter) => set({ articleFilter: filter }),
+
+      selectedCategories: [],
+      setSelectedCategories: (categories) => set({ selectedCategories: categories }),
+      toggleCategory: (category) =>
+        set((state) => ({
+          selectedCategories: state.selectedCategories.includes(category)
+            ? state.selectedCategories.filter((c) => c !== category)
+            : [...state.selectedCategories, category],
+        })),
+      clearCategories: () => set({ selectedCategories: [] }),
 
       theme: "system",
       setTheme: (theme) => set({ theme }),

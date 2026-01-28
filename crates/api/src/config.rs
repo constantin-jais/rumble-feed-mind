@@ -37,6 +37,59 @@ pub struct AppConfig {
     /// Environment (development, production)
     #[serde(default = "default_environment")]
     pub environment: String,
+
+    /// Stripe configuration
+    #[serde(flatten)]
+    pub stripe: StripeConfig,
+}
+
+/// Stripe configuration
+#[derive(Debug, Deserialize, Clone)]
+pub struct StripeConfig {
+    /// Stripe secret key
+    #[serde(default)]
+    pub stripe_secret_key: Option<String>,
+
+    /// Stripe publishable key (for frontend)
+    #[serde(default)]
+    pub stripe_publishable_key: Option<String>,
+
+    /// Stripe webhook signing secret
+    #[serde(default)]
+    pub stripe_webhook_secret: Option<String>,
+
+    /// Price IDs for subscription plans
+    #[serde(default)]
+    pub stripe_price_pro_monthly: Option<String>,
+    #[serde(default)]
+    pub stripe_price_pro_annual: Option<String>,
+    #[serde(default)]
+    pub stripe_price_team_monthly: Option<String>,
+    #[serde(default)]
+    pub stripe_price_team_annual: Option<String>,
+
+    /// Price IDs for usage-based billing
+    #[serde(default)]
+    pub stripe_price_ai_tokens: Option<String>,
+    #[serde(default)]
+    pub stripe_price_api_calls: Option<String>,
+}
+
+impl StripeConfig {
+    /// Check if Stripe is configured
+    pub fn is_configured(&self) -> bool {
+        self.stripe_secret_key.is_some()
+    }
+
+    /// Get the Stripe secret key (panics if not configured)
+    pub fn secret_key(&self) -> &str {
+        self.stripe_secret_key.as_deref().expect("Stripe secret key not configured")
+    }
+
+    /// Get the webhook secret (panics if not configured)
+    pub fn webhook_secret(&self) -> &str {
+        self.stripe_webhook_secret.as_deref().expect("Stripe webhook secret not configured")
+    }
 }
 
 fn default_host() -> String {
@@ -82,11 +135,23 @@ impl AppConfig {
             anyhow::bail!("MASTER_KEY is required");
         }
 
+        // Log Stripe configuration status
+        if app_config.stripe.is_configured() {
+            tracing::info!("Stripe billing is configured");
+        } else {
+            tracing::warn!("Stripe billing is not configured - billing features will be disabled");
+        }
+
         Ok(app_config)
     }
 
     /// Check if running in production
     pub fn is_production(&self) -> bool {
         self.environment == "production"
+    }
+
+    /// Check if Stripe billing is enabled
+    pub fn billing_enabled(&self) -> bool {
+        self.stripe.is_configured()
     }
 }

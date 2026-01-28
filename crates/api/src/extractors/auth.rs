@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::error::ApiError;
 use crate::routes::auth::Claims;
+use crate::routes::billing::AccountStatus;
 use crate::state::AppState;
 
 /// Current authenticated user extracted from JWT
@@ -14,6 +15,7 @@ pub struct CurrentUser {
     pub id: Uuid,
     pub email: String,
     pub tier: UserTier,
+    pub account_status: AccountStatus,
 }
 
 /// User subscription tier
@@ -69,10 +71,35 @@ impl FromRequestParts<AppState> for CurrentUser {
         // Parse tier
         let tier = UserTier::from_str(&claims.tier);
 
+        // Get account status from database (cached in JWT would be stale)
+        let account_status = sqlx::query_scalar::<_, AccountStatus>(
+            "SELECT account_status FROM users WHERE id = $1",
+        )
+        .bind(user_id)
+        .fetch_optional(state.db())
+        .await
+        .map_err(|_| ApiError::Internal("Failed to check account status".to_string()))?
+        .unwrap_or(AccountStatus::Active);
+
+        // Check if suspended - allow only read operations and billing
+        if account_status == AccountStatus::Suspended {
+            // Check if this is a billing or read-only request
+            let path = parts.uri.path();
+            let is_billing = path.starts_with("/api/v1/billing") || path.starts_with("/webhooks/stripe");
+            let is_opml_export = path == "/api/v1/opml/export";
+
+            if !is_billing && !is_opml_export {
+                return Err(ApiError::Forbidden(
+                    "Account suspended. Please update your payment method to continue.".to_string()
+                ));
+            }
+        }
+
         Ok(CurrentUser {
             id: user_id,
             email: claims.email,
             tier,
+            account_status,
         })
     }
 }

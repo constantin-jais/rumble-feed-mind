@@ -4,6 +4,7 @@ use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod config;
+mod handlers;
 mod jobs;
 mod queue;
 mod scheduler;
