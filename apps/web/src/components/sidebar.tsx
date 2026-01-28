@@ -13,11 +13,13 @@ import {
   Plus,
   RefreshCw,
   LogOut,
+  Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useFeeds, useLogout } from "@/lib/queries";
 import { useUIStore, useAuthStore } from "@/lib/store";
+import { OpmlImport } from "@/components/opml-import";
 import type { Feed } from "@/lib/api";
 
 export function Sidebar() {
@@ -25,10 +27,12 @@ export function Sidebar() {
   const { data: feeds, isLoading } = useFeeds();
   const logout = useLogout();
   const { user } = useAuthStore();
-  const { selectedFeedId, setSelectedFeed, articleFilter, setArticleFilter } = useUIStore();
+  const { selectedFeedId, setSelectedFeed, articleFilter, setArticleFilter } =
+    useUIStore();
   const [showAddFeed, setShowAddFeed] = useState(false);
 
-  const totalUnread = feeds?.reduce((acc, feed) => acc + feed.unread_count, 0) ?? 0;
+  const totalUnread =
+    feeds?.reduce((acc, feed) => acc + feed.unread_count, 0) ?? 0;
 
   return (
     <aside className="w-64 h-screen bg-sidebar border-r border-sidebar-border flex flex-col">
@@ -53,7 +57,7 @@ export function Sidebar() {
             "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm",
             articleFilter === "unread" && !selectedFeedId
               ? "bg-sidebar-accent text-sidebar-accent-foreground"
-              : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+              : "text-sidebar-foreground hover:bg-sidebar-accent/50",
           )}
         >
           <span>Unread</span>
@@ -72,7 +76,7 @@ export function Sidebar() {
             "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm",
             articleFilter === "starred" && !selectedFeedId
               ? "bg-sidebar-accent text-sidebar-accent-foreground"
-              : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+              : "text-sidebar-foreground hover:bg-sidebar-accent/50",
           )}
         >
           <Star className="w-4 h-4" />
@@ -87,7 +91,7 @@ export function Sidebar() {
             "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm",
             articleFilter === "all" && !selectedFeedId
               ? "bg-sidebar-accent text-sidebar-accent-foreground"
-              : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+              : "text-sidebar-foreground hover:bg-sidebar-accent/50",
           )}
         >
           <span>All Articles</span>
@@ -100,14 +104,29 @@ export function Sidebar() {
           <span className="text-xs font-medium text-muted-foreground uppercase">
             Feeds
           </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={() => setShowAddFeed(true)}
-          >
-            <Plus className="w-4 h-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <OpmlImport
+              trigger={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  title="Importer OPML"
+                >
+                  <Upload className="w-4 h-4" />
+                </Button>
+              }
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={() => setShowAddFeed(true)}
+              title="Ajouter un flux"
+            >
+              <Plus className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -135,12 +154,24 @@ export function Sidebar() {
       {/* Footer */}
       <div className="p-2 border-t border-sidebar-border space-y-1">
         <Link
+          href="/feeds"
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-md text-sm",
+            pathname === "/feeds"
+              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+              : "text-sidebar-foreground hover:bg-sidebar-accent/50",
+          )}
+        >
+          <Rss className="w-4 h-4" />
+          <span>Manage Feeds</span>
+        </Link>
+        <Link
           href="/settings"
           className={cn(
             "flex items-center gap-2 px-3 py-2 rounded-md text-sm",
             pathname === "/settings"
               ? "bg-sidebar-accent text-sidebar-accent-foreground"
-              : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+              : "text-sidebar-foreground hover:bg-sidebar-accent/50",
           )}
         >
           <Settings className="w-4 h-4" />
@@ -179,7 +210,7 @@ function FeedItem({
         "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm",
         isSelected
           ? "bg-sidebar-accent text-sidebar-accent-foreground"
-          : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+          : "text-sidebar-foreground hover:bg-sidebar-accent/50",
       )}
     >
       <div className="flex items-center gap-2 min-w-0">

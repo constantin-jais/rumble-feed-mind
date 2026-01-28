@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
-import { useAuthStore } from "@/lib/store";
-import { setAuthToken } from "@/lib/api";
+import { useAuth } from "@/lib/store";
 
 export default function DashboardLayout({
   children,
@@ -12,24 +11,28 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { token, isAuthenticated } = useAuthStore();
+  const pathname = usePathname();
+  const { isAuthenticated, isInitialized, isLoading } = useAuth();
 
   useEffect(() => {
-    // Restore token to API client
-    if (token) {
-      setAuthToken(token);
+    // Redirect to login if not authenticated (after initialization)
+    if (isInitialized && !isAuthenticated) {
+      const loginUrl = `/login?redirect=${encodeURIComponent(pathname)}`;
+      router.push(loginUrl);
     }
-  }, [token]);
+  }, [isAuthenticated, isInitialized, router, pathname]);
 
-  useEffect(() => {
-    // Redirect to login if not authenticated
-    if (!isAuthenticated && !token) {
-      router.push("/login");
-    }
-  }, [isAuthenticated, token, router]);
+  // Show loading state while checking auth
+  if (!isInitialized || isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
-  // Show nothing while checking auth
-  if (!isAuthenticated && !token) {
+  // Don't render if not authenticated (redirect will happen)
+  if (!isAuthenticated) {
     return null;
   }
 

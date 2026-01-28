@@ -93,7 +93,7 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     public code: string,
-    message: string
+    message: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -123,22 +123,28 @@ export function getAuthToken(): string | null {
 // Base fetch wrapper
 async function apiFetch<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  skipContentType = false,
 ): Promise<T> {
   const token = getAuthToken();
 
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-    ...options.headers,
-  };
+  const headers: Record<string, string> = {};
+
+  // Only set Content-Type for non-FormData requests
+  if (!skipContentType) {
+    headers["Content-Type"] = "application/json";
+  }
 
   if (token) {
-    (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
-    headers,
+    headers: {
+      ...headers,
+      ...(options.headers as Record<string, string>),
+    },
   });
 
   if (!response.ok) {
@@ -146,7 +152,7 @@ async function apiFetch<T>(
     throw new ApiError(
       response.status,
       error.code || "UNKNOWN_ERROR",
-      error.message || `Request failed with status ${response.status}`
+      error.message || `Request failed with status ${response.status}`,
     );
   }
 
@@ -174,7 +180,8 @@ export const authApi = {
 
   me: () => apiFetch<{ data: User }>("/api/v1/auth/me"),
 
-  refresh: () => apiFetch<AuthResponse>("/api/v1/auth/refresh", { method: "POST" }),
+  refresh: () =>
+    apiFetch<AuthResponse>("/api/v1/auth/refresh", { method: "POST" }),
 };
 
 // Feeds API
@@ -184,7 +191,9 @@ export const feedsApi = {
     if (params?.folder_id) searchParams.set("folder_id", params.folder_id);
     if (params?.limit) searchParams.set("limit", params.limit.toString());
     const query = searchParams.toString();
-    return apiFetch<ListResponse<Feed>>(`/api/v1/feeds${query ? `?${query}` : ""}`);
+    return apiFetch<ListResponse<Feed>>(
+      `/api/v1/feeds${query ? `?${query}` : ""}`,
+    );
   },
 
   get: (id: string) => apiFetch<{ data: Feed }>(`/api/v1/feeds/${id}`),
@@ -195,7 +204,10 @@ export const feedsApi = {
       body: JSON.stringify({ url, folder_id: folderId, title }),
     }),
 
-  update: (id: string, data: Partial<Pick<Feed, "title" | "folder_id" | "priority">>) =>
+  update: (
+    id: string,
+    data: Partial<Pick<Feed, "title" | "folder_id" | "priority">>,
+  ) =>
     apiFetch<{ data: Feed }>(`/api/v1/feeds/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
@@ -228,7 +240,9 @@ export const articlesApi = {
     if (params?.limit) searchParams.set("limit", params.limit.toString());
     if (params?.cursor) searchParams.set("cursor", params.cursor);
     const query = searchParams.toString();
-    return apiFetch<ListResponse<Article>>(`/api/v1/articles${query ? `?${query}` : ""}`);
+    return apiFetch<ListResponse<Article>>(
+      `/api/v1/articles${query ? `?${query}` : ""}`,
+    );
   },
 
   get: (id: string) => apiFetch<{ data: Article }>(`/api/v1/articles/${id}`),
@@ -239,7 +253,10 @@ export const articlesApi = {
       body: JSON.stringify(data),
     }),
 
-  batchUpdate: (articleIds: string[], data: { is_read?: boolean; is_starred?: boolean }) =>
+  batchUpdate: (
+    articleIds: string[],
+    data: { is_read?: boolean; is_starred?: boolean },
+  ) =>
     apiFetch<{ data: { updated: number } }>("/api/v1/articles/batch", {
       method: "PUT",
       body: JSON.stringify({ article_ids: articleIds, ...data }),
@@ -252,21 +269,45 @@ export const articlesApi = {
     const query = searchParams.toString();
     return apiFetch<{ data: { updated: number } }>(
       `/api/v1/articles/mark-all-read${query ? `?${query}` : ""}`,
-      { method: "POST" }
+      { method: "POST" },
     );
   },
 };
+
+// OPML types
+export interface OpmlFeedPreview {
+  title: string;
+  xmlUrl: string;
+  htmlUrl?: string;
+  folder?: string;
+}
+
+export interface OpmlParseResult {
+  feeds: OpmlFeedPreview[];
+  folders: string[];
+  title?: string;
+}
+
+export interface OpmlImportResult {
+  imported: number;
+  skipped: number;
+  feeds: Feed[];
+  errors?: string[];
+}
 
 // OPML API
 export const opmlApi = {
   import: (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
-    return apiFetch<{ data: { imported: number; feeds: Feed[] } }>("/api/v1/opml/import", {
-      method: "POST",
-      headers: {}, // Let browser set Content-Type with boundary
-      body: formData,
-    });
+    return apiFetch<{ data: OpmlImportResult }>(
+      "/api/v1/opml/import",
+      {
+        method: "POST",
+        body: formData,
+      },
+      true, // Skip Content-Type to let browser set multipart boundary
+    );
   },
 
   export: () => apiFetch<Blob>("/api/v1/opml/export"),
@@ -277,9 +318,12 @@ export const rulesApi = {
   list: (params?: { feed_id?: string; active?: boolean }) => {
     const searchParams = new URLSearchParams();
     if (params?.feed_id) searchParams.set("feed_id", params.feed_id);
-    if (params?.active !== undefined) searchParams.set("active", params.active.toString());
+    if (params?.active !== undefined)
+      searchParams.set("active", params.active.toString());
     const query = searchParams.toString();
-    return apiFetch<ListResponse<Rule>>(`/api/v1/rules${query ? `?${query}` : ""}`);
+    return apiFetch<ListResponse<Rule>>(
+      `/api/v1/rules${query ? `?${query}` : ""}`,
+    );
   },
 
   get: (id: string) => apiFetch<{ data: Rule }>(`/api/v1/rules/${id}`),
@@ -315,6 +359,55 @@ export const rulesApi = {
       {
         method: "POST",
         body: JSON.stringify({ article_id: articleId }),
-      }
+      },
     ),
+};
+
+// Folders API
+export const foldersApi = {
+  list: () => apiFetch<ListResponse<Folder>>("/api/v1/folders"),
+
+  get: (id: string) => apiFetch<{ data: Folder }>(`/api/v1/folders/${id}`),
+
+  create: (name: string, parentId?: string) =>
+    apiFetch<{ data: Folder }>("/api/v1/folders", {
+      method: "POST",
+      body: JSON.stringify({ name, parent_id: parentId }),
+    }),
+
+  update: (
+    id: string,
+    data: Partial<Pick<Folder, "name" | "parent_id" | "position">>,
+  ) =>
+    apiFetch<{ data: Folder }>(`/api/v1/folders/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) =>
+    apiFetch<{ data: { success: boolean } }>(`/api/v1/folders/${id}`, {
+      method: "DELETE",
+    }),
+};
+
+// API Keys types
+export interface ApiKeys {
+  anthropic_key_set: boolean;
+  openai_key_set: boolean;
+}
+
+// Settings API
+export const settingsApi = {
+  getApiKeys: () => apiFetch<{ data: ApiKeys }>("/api/v1/settings/api-keys"),
+
+  updateApiKeys: (data: { anthropic_key?: string; openai_key?: string }) =>
+    apiFetch<{ data: ApiKeys }>("/api/v1/settings/api-keys", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteAccount: () =>
+    apiFetch<{ data: { success: boolean } }>("/api/v1/settings/account", {
+      method: "DELETE",
+    }),
 };
