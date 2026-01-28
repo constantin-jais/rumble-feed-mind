@@ -33,6 +33,7 @@ export interface Feed {
   error_count: number;
   last_error: string | null;
   last_fetched_at: string | null;
+  category_filter: FeedCategoryFilter | null;
   created_at: string;
 }
 
@@ -51,7 +52,26 @@ export interface Article {
   is_starred: boolean;
   is_hidden?: boolean;
   word_count: number | null;
+  categories: string[];
   created_at?: string;
+}
+
+export interface Category {
+  category: string;
+  article_count: number;
+  feed_count: number;
+}
+
+export interface FeedCategory {
+  category: string;
+  article_count: number;
+  first_seen_at: string;
+  last_seen_at: string;
+}
+
+export interface FeedCategoryFilter {
+  mode: "include" | "exclude";
+  categories: string[];
 }
 
 export interface Folder {
@@ -59,6 +79,43 @@ export interface Folder {
   name: string;
   parent_id: string | null;
   position: number;
+  feed_count?: number;
+  unread_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Tag {
+  id: string;
+  name: string;
+  color: string | null;
+  article_count: number;
+  created_at: string;
+}
+
+export interface ArticleTag {
+  tag_id: string;
+  tag_name: string;
+  tag_color: string | null;
+  applied_by: string;
+  created_at: string;
+}
+
+export interface RuleConfig {
+  pattern: string;
+  fields: ("title" | "content" | "summary" | "author" | "url")[];
+  case_sensitive: boolean;
+}
+
+export interface RulePreviewResult {
+  total_articles: number;
+  matched_articles: number;
+  sample_matches: Array<{
+    article_id: string;
+    title: string;
+    matched_field: string;
+    matched_text: string;
+  }>;
 }
 
 export interface Rule {
@@ -206,7 +263,7 @@ export const feedsApi = {
 
   update: (
     id: string,
-    data: Partial<Pick<Feed, "title" | "folder_id" | "priority">>,
+    data: Partial<Pick<Feed, "title" | "folder_id" | "priority" | "category_filter">>,
   ) =>
     apiFetch<{ data: Feed }>(`/api/v1/feeds/${id}`, {
       method: "PUT",
@@ -230,6 +287,7 @@ export const articlesApi = {
     feed_id?: string;
     folder_id?: string;
     status?: "unread" | "read" | "starred" | "hidden";
+    categories?: string[];
     limit?: number;
     cursor?: string;
   }) => {
@@ -237,6 +295,8 @@ export const articlesApi = {
     if (params?.feed_id) searchParams.set("feed_id", params.feed_id);
     if (params?.folder_id) searchParams.set("folder_id", params.folder_id);
     if (params?.status) searchParams.set("status", params.status);
+    if (params?.categories?.length)
+      searchParams.set("categories", params.categories.join(","));
     if (params?.limit) searchParams.set("limit", params.limit.toString());
     if (params?.cursor) searchParams.set("cursor", params.cursor);
     const query = searchParams.toString();
@@ -409,5 +469,244 @@ export const settingsApi = {
   deleteAccount: () =>
     apiFetch<{ data: { success: boolean } }>("/api/v1/settings/account", {
       method: "DELETE",
+    }),
+};
+
+// Categories API
+export const categoriesApi = {
+  list: () => apiFetch<ListResponse<Category>>("/api/v1/categories"),
+
+  listForFeed: (feedId: string) =>
+    apiFetch<ListResponse<FeedCategory>>(`/api/v1/feeds/${feedId}/categories`),
+};
+
+// Tags API
+export const tagsApi = {
+  list: () => apiFetch<{ data: Tag[]; meta: { total: number } }>("/api/v1/tags"),
+
+  get: (id: string) => apiFetch<{ data: Tag }>(`/api/v1/tags/${id}`),
+
+  create: (data: { name: string; color?: string }) =>
+    apiFetch<{ data: Tag }>("/api/v1/tags", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: { name?: string; color?: string }) =>
+    apiFetch<{ data: Tag }>(`/api/v1/tags/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) =>
+    apiFetch<{ data: { success: boolean } }>(`/api/v1/tags/${id}`, {
+      method: "DELETE",
+    }),
+
+  getArticleTags: (articleId: string) =>
+    apiFetch<{ data: ArticleTag[] }>(`/api/v1/articles/${articleId}/tags`),
+
+  addTagToArticle: (articleId: string, tagId: string) =>
+    apiFetch<{ data: ArticleTag[] }>(`/api/v1/articles/${articleId}/tags`, {
+      method: "POST",
+      body: JSON.stringify({ tag_id: tagId }),
+    }),
+
+  removeTagFromArticle: (articleId: string, tagId: string) =>
+    apiFetch<{ data: { success: boolean } }>(
+      `/api/v1/articles/${articleId}/tags/${tagId}`,
+      { method: "DELETE" }
+    ),
+};
+
+// Extended Rules API with preview
+export const rulesApiExtended = {
+  ...rulesApi,
+
+  preview: (data: {
+    config: RuleConfig;
+    feed_id?: string;
+    folder_id?: string;
+    limit?: number;
+  }) =>
+    apiFetch<{ data: RulePreviewResult }>("/api/v1/rules/preview", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  toggle: (id: string, isActive: boolean) =>
+    apiFetch<{ data: Rule }>(`/api/v1/rules/${id}/toggle`, {
+      method: "POST",
+      body: JSON.stringify({ is_active: isActive }),
+    }),
+
+  reorder: (ruleIds: string[]) =>
+    apiFetch<{ data: Rule[]; meta: { total: number } }>("/api/v1/rules/reorder", {
+      method: "POST",
+      body: JSON.stringify({ rule_ids: ruleIds }),
+    }),
+};
+
+// ============================================================================
+// BILLING API
+// ============================================================================
+
+export interface Plan {
+  id: string;
+  name: string;
+  tier: "free" | "pro" | "team";
+  description: string;
+  price_monthly: number;
+  price_annual: number;
+  features: string[];
+  limits: {
+    max_feeds: number;
+    max_rules: number;
+    ai_tokens: number;
+    api_calls: number;
+  };
+  is_current: boolean;
+  is_popular: boolean;
+}
+
+export interface Subscription {
+  id: string;
+  plan_id: string;
+  plan_name: string;
+  status: "active" | "past_due" | "canceled" | "incomplete";
+  interval: "monthly" | "annual";
+  current_period_start: string;
+  current_period_end: string;
+  cancel_at_period_end: boolean;
+  canceled_at: string | null;
+  trial_end: string | null;
+}
+
+export interface UsageSummary {
+  ai_tokens: {
+    used: number;
+    limit: number;
+    remaining: number;
+  };
+  api_calls: {
+    used: number;
+    limit: number;
+    remaining: number;
+  };
+  period_start: string;
+  period_end: string;
+}
+
+export interface UsageHistory {
+  date: string;
+  ai_tokens: number;
+  api_calls: number;
+}
+
+export interface Invoice {
+  id: string;
+  number: string;
+  status: "draft" | "open" | "paid" | "void" | "uncollectible";
+  amount: number;
+  currency: string;
+  period_start: string;
+  period_end: string;
+  paid_at: string | null;
+  pdf_url: string | null;
+  created_at: string;
+}
+
+export interface PaymentMethod {
+  id: string;
+  type: "card";
+  brand: string;
+  last4: string;
+  exp_month: number;
+  exp_year: number;
+  is_default: boolean;
+}
+
+export const billingApi = {
+  // Plans
+  getPlans: () =>
+    apiFetch<{ data: Plan[] }>("/api/v1/billing/plans"),
+
+  // Subscription
+  getSubscription: () =>
+    apiFetch<{ data: Subscription | null }>("/api/v1/billing/subscription"),
+
+  subscribe: (priceId: string) =>
+    apiFetch<{ data: { checkout_url: string } }>("/api/v1/billing/subscribe", {
+      method: "POST",
+      body: JSON.stringify({ price_id: priceId }),
+    }),
+
+  changePlan: (priceId: string) =>
+    apiFetch<{ data: Subscription }>("/api/v1/billing/change-plan", {
+      method: "POST",
+      body: JSON.stringify({ price_id: priceId }),
+    }),
+
+  cancel: (reason?: string) =>
+    apiFetch<{ data: Subscription }>("/api/v1/billing/cancel", {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  reactivate: () =>
+    apiFetch<{ data: Subscription }>("/api/v1/billing/reactivate", {
+      method: "POST",
+    }),
+
+  // Usage
+  getUsage: () =>
+    apiFetch<{ data: UsageSummary }>("/api/v1/billing/usage"),
+
+  getUsageHistory: (params?: { days?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.days) searchParams.set("days", params.days.toString());
+    const query = searchParams.toString();
+    return apiFetch<{ data: UsageHistory[] }>(
+      `/api/v1/billing/usage/history${query ? `?${query}` : ""}`
+    );
+  },
+
+  // Invoices
+  getInvoices: (params?: { limit?: number; cursor?: string }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.limit) searchParams.set("limit", params.limit.toString());
+    if (params?.cursor) searchParams.set("cursor", params.cursor);
+    const query = searchParams.toString();
+    return apiFetch<ListResponse<Invoice>>(
+      `/api/v1/billing/invoices${query ? `?${query}` : ""}`
+    );
+  },
+
+  getInvoice: (id: string) =>
+    apiFetch<{ data: Invoice }>(`/api/v1/billing/invoices/${id}`),
+
+  // Payment Methods
+  getPaymentMethods: () =>
+    apiFetch<{ data: PaymentMethod[] }>("/api/v1/billing/payment-methods"),
+
+  addPaymentMethod: () =>
+    apiFetch<{ data: { setup_url: string } }>("/api/v1/billing/payment-methods", {
+      method: "POST",
+    }),
+
+  deletePaymentMethod: (id: string) =>
+    apiFetch<{ data: { success: boolean } }>(`/api/v1/billing/payment-methods/${id}`, {
+      method: "DELETE",
+    }),
+
+  setDefaultPaymentMethod: (id: string) =>
+    apiFetch<{ data: PaymentMethod }>(`/api/v1/billing/payment-methods/${id}/default`, {
+      method: "POST",
+    }),
+
+  // Customer Portal
+  createPortalSession: () =>
+    apiFetch<{ data: { portal_url: string } }>("/api/v1/billing/portal-session", {
+      method: "POST",
     }),
 };

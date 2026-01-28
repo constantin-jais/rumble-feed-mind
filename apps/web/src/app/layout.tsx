@@ -19,6 +19,19 @@ export const metadata: Metadata = {
     "RSS reader with AI-powered filtering and natural language rules",
 };
 
+// Script to prevent theme flash on page load
+const themeScript = `
+  (function() {
+    try {
+      const stored = localStorage.getItem('feedmind-ui');
+      const theme = stored ? JSON.parse(stored).state?.theme : 'system';
+      const isDark = theme === 'dark' ||
+        (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.classList.toggle('dark', isDark);
+    } catch (e) {}
+  })();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -26,6 +39,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
