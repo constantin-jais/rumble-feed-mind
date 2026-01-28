@@ -379,8 +379,8 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/feeds", get(list_feeds).post(create_feed))
         .route(
-            "/api/v1/feeds/:id",
+            "/api/v1/feeds/{id}",
             get(get_feed).put(update_feed).delete(delete_feed),
         )
-        .route("/api/v1/feeds/:id/refresh", post(refresh_feed))
+        .route("/api/v1/feeds/{id}/refresh", post(refresh_feed))
 }

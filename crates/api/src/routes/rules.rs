@@ -185,5 +185,5 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/rules", get(list_rules).post(create_rule))
         .route("/api/v1/rules/preview", post(preview_rule))
-        .route("/api/v1/rules/:rule_id", get(get_rule).put(update_rule).delete(delete_rule))
+        .route("/api/v1/rules/{rule_id}", get(get_rule).put(update_rule).delete(delete_rule))
 }
