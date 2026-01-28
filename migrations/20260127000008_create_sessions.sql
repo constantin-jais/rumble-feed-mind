@@ -24,5 +24,5 @@ CREATE INDEX idx_sessions_user ON sessions(user_id);
 -- Index for token lookup
 CREATE INDEX idx_sessions_token ON sessions(refresh_token_hash);
 
--- Index for expired sessions cleanup
-CREATE INDEX idx_sessions_expired ON sessions(expires_at) WHERE expires_at < NOW();
+-- Index for expired sessions cleanup (simple btree for range queries)
+CREATE INDEX idx_sessions_expired ON sessions(expires_at);
