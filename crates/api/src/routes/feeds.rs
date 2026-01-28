@@ -2,9 +2,10 @@
 
 use axum::{
     extract::{Path, Query, State},
-    routing::{delete, get, post, put},
+    routing::{get, post},
     Json, Router,
 };
+use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
@@ -14,11 +15,12 @@ use crate::error::{ApiError, ApiResult};
 use crate::extractors::auth::CurrentUser;
 use crate::state::AppState;
 
+use feedmind_core::feed::{Feed as FeedMeta, FeedFetcher, FeedItem};
+
 /// Create feed request
 #[derive(Debug, Deserialize, Validate)]
 pub struct CreateFeedRequest {
-    #[validate(url(message = "Invalid URL"))]
-    #[validate(length(max = 2048))]
+    #[validate(length(min = 1, max = 2048))]
     pub url: String,
     pub folder_id: Option<Uuid>,
     pub title: Option<String>,
@@ -80,7 +82,169 @@ pub struct ListMeta {
     pub has_more: bool,
 }
 
-/// Create a new feed
+// =============================================================================
+// Helper functions
+// =============================================================================
+
+/// Normalize a URL or domain into a proper URL
+fn normalize_url(input: &str) -> String {
+    let trimmed = input.trim();
+
+    // Already has a scheme
+    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        return trimmed.to_string();
+    }
+
+    // Add https:// prefix
+    format!("https://{}", trimmed)
+}
+
+/// Discover RSS/Atom feed URL from an HTML page
+async fn discover_feed_url(page_url: &str) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .user_agent("FeedMind/1.0")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let response = client
+        .get(page_url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch page: {}", e))?;
+
+    let html = response.text().await.map_err(|e| e.to_string())?;
+
+    // Look for RSS/Atom link tags
+    let feed_patterns = [
+        r#"<link[^>]+type="application/rss\+xml"[^>]+href="([^"]+)""#,
+        r#"<link[^>]+href="([^"]+)"[^>]+type="application/rss\+xml""#,
+        r#"<link[^>]+type="application/atom\+xml"[^>]+href="([^"]+)""#,
+        r#"<link[^>]+href="([^"]+)"[^>]+type="application/atom\+xml""#,
+    ];
+
+    for pattern in feed_patterns {
+        if let Ok(re) = regex::Regex::new(pattern) {
+            if let Some(caps) = re.captures(&html) {
+                if let Some(href) = caps.get(1) {
+                    let feed_url = href.as_str();
+                    // Handle relative URLs
+                    if feed_url.starts_with("http") {
+                        return Ok(feed_url.to_string());
+                    } else if feed_url.starts_with("//") {
+                        return Ok(format!("https:{}", feed_url));
+                    } else if feed_url.starts_with('/') {
+                        let base = page_url.split('/').take(3).collect::<Vec<_>>().join("/");
+                        return Ok(format!("{}{}", base, feed_url));
+                    } else {
+                        let base = page_url
+                            .rsplit_once('/')
+                            .map(|(b, _)| b)
+                            .unwrap_or(page_url);
+                        return Ok(format!("{}/{}", base, feed_url));
+                    }
+                }
+            }
+        }
+    }
+
+    // Try common feed paths as fallback
+    let base_url = page_url.trim_end_matches('/');
+    let common_paths = [
+        "/feed",
+        "/feed.xml",
+        "/rss",
+        "/rss.xml",
+        "/atom.xml",
+        "/index.xml",
+        "/feeds/posts/default",
+    ];
+
+    for path in common_paths {
+        let test_url = format!("{}{}", base_url, path);
+        if let Ok(resp) = client.head(&test_url).send().await {
+            if resp.status().is_success() {
+                let content_type = resp
+                    .headers()
+                    .get("content-type")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("");
+                if content_type.contains("xml")
+                    || content_type.contains("rss")
+                    || content_type.contains("atom")
+                {
+                    return Ok(test_url);
+                }
+            }
+        }
+    }
+
+    Err("No RSS/Atom feed found on this page".to_string())
+}
+
+/// Generate icon URL from site domain using Google Favicon service
+fn generate_icon_url(site_url: Option<&String>) -> Option<String> {
+    site_url.map(|site| {
+        let domain = site
+            .trim_start_matches("https://")
+            .trim_start_matches("http://")
+            .split('/')
+            .next()
+            .unwrap_or(site);
+        format!("https://www.google.com/s2/favicons?domain={}&sz=64", domain)
+    })
+}
+
+/// Filter articles to last 12 months and limit to max 20
+fn filter_articles_for_initial_import(items: Vec<FeedItem>) -> Vec<FeedItem> {
+    let twelve_months_ago = Utc::now() - Duration::days(365);
+
+    let mut filtered: Vec<FeedItem> = items
+        .into_iter()
+        .filter(|item| {
+            item.published_at
+                .map(|d| d > twelve_months_ago)
+                .unwrap_or(true) // Keep items without date
+        })
+        .collect();
+
+    // Sort by date descending (newest first)
+    filtered.sort_by(|a, b| {
+        let date_a = a.published_at.unwrap_or(Utc::now());
+        let date_b = b.published_at.unwrap_or(Utc::now());
+        date_b.cmp(&date_a)
+    });
+
+    // Limit to 20
+    filtered.truncate(20);
+    filtered
+}
+
+/// Calculate priority based on article frequency in last 12 months
+fn calculate_priority(items: &[FeedItem]) -> &'static str {
+    let twelve_months_ago = Utc::now() - Duration::days(365);
+
+    let articles_in_window = items
+        .iter()
+        .filter(|item| {
+            item.published_at
+                .map(|d| d > twelve_months_ago)
+                .unwrap_or(false)
+        })
+        .count();
+
+    match articles_in_window {
+        n if n > 365 => "hot",  // > 1/day
+        n if n >= 52 => "warm", // 1-7/week
+        _ => "cold",            // < 1/week
+    }
+}
+
+// =============================================================================
+// Route handlers
+// =============================================================================
+
+/// Create a new feed with sync fetch
 async fn create_feed(
     State(state): State<AppState>,
     user: CurrentUser,
@@ -88,6 +252,9 @@ async fn create_feed(
 ) -> ApiResult<Json<FeedResponse>> {
     req.validate()
         .map_err(|e| ApiError::Validation(e.to_string()))?;
+
+    // Normalize the URL (add https:// if missing)
+    let normalized_url = normalize_url(&req.url);
 
     // Check feed limit
     let feed_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM feeds WHERE user_id = $1")
@@ -104,11 +271,32 @@ async fn create_feed(
         )));
     }
 
+    // Fetch and parse the feed
+    let fetcher =
+        FeedFetcher::new().map_err(|e| ApiError::Internal(format!("Fetcher error: {}", e)))?;
+
+    // Try to fetch as feed first, then try to discover feed from HTML page
+    let (feed_url, feed_meta, items) = match fetcher.fetch(&normalized_url).await {
+        Ok((meta, items)) => (normalized_url.clone(), meta, items),
+        Err(_) => {
+            // Try to discover RSS/Atom link from the HTML page
+            let discovered_url = discover_feed_url(&normalized_url)
+                .await
+                .map_err(|e| ApiError::Validation(format!("Could not find RSS feed: {}", e)))?;
+
+            let (meta, items) = fetcher.fetch(&discovered_url).await.map_err(|e| {
+                ApiError::Validation(format!("Failed to fetch discovered feed: {}", e))
+            })?;
+
+            (discovered_url, meta, items)
+        }
+    };
+
     // Check if feed URL already exists for user
     let exists: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM feeds WHERE user_id = $1 AND url = $2)")
             .bind(user.id)
-            .bind(&req.url)
+            .bind(&feed_url)
             .fetch_one(state.db())
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
@@ -117,55 +305,87 @@ async fn create_feed(
         return Err(ApiError::Conflict("Feed already exists".to_string()));
     }
 
-    // Fetch and parse the feed to get metadata
-    let fetcher = feedmind_core::feed::FeedFetcher::new()
-        .map_err(|e| ApiError::Internal(format!("Fetcher error: {}", e)))?;
+    // Calculate priority based on frequency
+    let priority = calculate_priority(&items);
 
-    let (feed_meta, _items) = fetcher
-        .fetch(&req.url)
-        .await
-        .map_err(|e| ApiError::Validation(format!("Failed to fetch feed: {}", e)))?;
+    // Filter articles for initial import (last 12 months, max 20)
+    let articles_to_import = filter_articles_for_initial_import(items);
+    let initial_article_count = articles_to_import.len() as i32;
 
-    // Use provided title or fetched title
+    // Prepare feed data
     let title = req.title.unwrap_or(feed_meta.title);
     let feed_type_str = feed_meta.feed_type.to_string();
+    let icon_url = generate_icon_url(feed_meta.site_url.as_ref());
+
+    // Start transaction
+    let mut tx = state
+        .db()
+        .begin()
+        .await
+        .map_err(|e| ApiError::Internal(format!("Transaction error: {}", e)))?;
 
     // Insert feed
     let feed: FeedRow = sqlx::query_as(
         r#"
-        INSERT INTO feeds (user_id, url, title, description, site_url, feed_type, folder_id, priority)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, 'warm')
+        INSERT INTO feeds (user_id, url, title, description, site_url, icon_url, feed_type, folder_id, priority, last_fetched_at, article_count, unread_count)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), $10, $10)
         RETURNING id, url, title, description, site_url, icon_url, feed_type, priority,
                   folder_id, article_count, unread_count, error_count, last_error,
                   last_fetched_at, created_at
-        "#
+        "#,
     )
     .bind(user.id)
-    .bind(&req.url)
+    .bind(&feed_url)
     .bind(&title)
     .bind(&feed_meta.description)
     .bind(&feed_meta.site_url)
+    .bind(&icon_url)
     .bind(&feed_type_str)
     .bind(req.folder_id)
-    .fetch_one(state.db())
+    .bind(priority)
+    .bind(initial_article_count)
+    .fetch_one(&mut *tx)
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to create feed: {}", e)))?;
 
-    // Queue initial fetch job
-    let mut redis = state.redis();
-    let job = serde_json::json!({
-        "id": Uuid::new_v4().to_string(),
-        "job_type": { "type": "FetchFeed", "data": { "feed_id": feed.id.to_string() } },
-        "attempts": 0,
-        "max_attempts": 3,
-        "created_at": chrono::Utc::now().to_rfc3339()
-    });
-    let _: () = redis::cmd("RPUSH")
-        .arg("feedmind:jobs")
-        .arg(job.to_string())
-        .query_async(&mut redis)
+    // Insert articles
+    for item in articles_to_import {
+        let guid = if item.guid.is_empty() {
+            item.url
+                .clone()
+                .unwrap_or_else(|| Uuid::new_v4().to_string())
+        } else {
+            item.guid.clone()
+        };
+
+        let result = sqlx::query(
+            r#"
+            INSERT INTO articles (feed_id, user_id, guid, url, title, content, summary, author, published_at, fetched_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+            ON CONFLICT (feed_id, guid) DO NOTHING
+            "#,
+        )
+        .bind(feed.id)
+        .bind(user.id)
+        .bind(&guid)
+        .bind(&item.url)
+        .bind(&item.title)
+        .bind(&item.content)
+        .bind(&item.summary)
+        .bind(&item.author)
+        .bind(item.published_at)
+        .execute(&mut *tx)
+        .await;
+
+        if let Err(e) = result {
+            tracing::warn!("Failed to insert article {}: {}", item.title, e);
+        }
+    }
+
+    // Commit transaction
+    tx.commit()
         .await
-        .map_err(|e| ApiError::Internal(format!("Failed to queue job: {}", e)))?;
+        .map_err(|e| ApiError::Internal(format!("Commit error: {}", e)))?;
 
     Ok(Json(FeedResponse { data: feed }))
 }
