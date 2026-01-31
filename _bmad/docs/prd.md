@@ -2671,6 +2671,107 @@ V1 est un produit pour **5 power users** (l'équipe fondatrice). Pas de features
 
 ---
 
+### FR-SEARCH : Recherche *(AMD-002)*
+
+#### FR-SEARCH-01 : Recherche par titre
+
+**Actor** : User  
+**Capability** : L'utilisateur peut rechercher des articles par titre.
+
+**Acceptance Criteria** :
+- [ ] Champ de recherche accessible via `/` (raccourci)
+- [ ] Recherche case-insensitive
+- [ ] Résultats en temps réel (debounce 300ms)
+- [ ] Minimum 2 caractères pour déclencher
+- [ ] Highlight des termes matchés
+- [ ] Temps de réponse < 500ms (10k articles)
+
+---
+
+#### FR-SEARCH-02 : Filtres de recherche
+
+**Actor** : User  
+**Capability** : L'utilisateur peut filtrer les résultats de recherche.
+
+**Acceptance Criteria** :
+- [ ] Filtre par source/feed
+- [ ] Filtre par tag
+- [ ] Filtre par date (presets : aujourd'hui, 7j, 30j + custom)
+- [ ] Filtre par statut (lu/non-lu/favori)
+- [ ] Combinaison de filtres (AND)
+- [ ] Sauvegarde des filtres favoris (Pro)
+
+---
+
+#### FR-SEARCH-03 : Recherche full-text (Pro)
+
+**Actor** : User (Pro)  
+**Capability** : L'utilisateur Pro peut rechercher dans le contenu des articles.
+
+**Acceptance Criteria** :
+- [ ] Recherche dans le contenu extrait (Readability)
+- [ ] Index PostgreSQL FTS ou Meilisearch
+- [ ] Résultats avec extrait contextualisé
+- [ ] Temps de réponse < 1s (100k articles)
+
+---
+
+### FR-PRIORITY : Flux Prioritaires *(AMD-006)*
+
+#### FR-PRIORITY-01 : Définir priorité de flux
+
+**Actor** : User  
+**Capability** : L'utilisateur peut définir la priorité d'un flux (Hot/Warm/Cold).
+
+**Acceptance Criteria** :
+- [ ] 3 niveaux : Prioritaire (⭐⭐⭐), Normal (⭐⭐), Archive (⭐)
+- [ ] Menu contextuel ou clic sur icône étoile
+- [ ] Bulk action possible (sélection multiple)
+- [ ] Import OPML : tous "Normal" par défaut
+- [ ] Limite Free : 3 flux prioritaires max
+
+---
+
+#### FR-PRIORITY-02 : Vue flux prioritaires
+
+**Actor** : User  
+**Capability** : L'utilisateur peut voir uniquement les articles des flux prioritaires.
+
+**Acceptance Criteria** :
+- [ ] Vue "Prioritaires" dans sidebar (toujours visible en haut)
+- [ ] Affiche uniquement les flux ⭐⭐⭐
+- [ ] Raccourci clavier `g p` (go priority)
+- [ ] Badge avec count non-lus
+
+---
+
+#### FR-PRIORITY-03 : Section Archives
+
+**Actor** : User  
+**Capability** : Les flux archivés sont regroupés dans une section dédiée.
+
+**Acceptance Criteria** :
+- [ ] Section "Archives" en bas de sidebar
+- [ ] Collapsed par défaut
+- [ ] Non inclus dans "Tous les articles" (sauf si explicitement ouvert)
+- [ ] Refresh réduit automatiquement (24h)
+- [ ] Indicateur visuel distinct (grisé)
+
+---
+
+#### FR-PRIORITY-04 : Comportement priorité
+
+**Actor** : System  
+**Capability** : Le système adapte son comportement selon la priorité.
+
+**Acceptance Criteria** :
+- [ ] Prioritaire : refresh 15min (override auto), notifications
+- [ ] Normal : Smart Polling, badge uniquement
+- [ ] Archive : refresh 24h, pas de notification
+- [ ] Possibilité de configurer par priorité (Pro)
+
+---
+
 ### FR-ADMIN : Administration
 
 #### FR-ADMIN-01 : Dashboard métriques
@@ -3351,6 +3452,7 @@ Business Metrics
 |---------|------|--------|-------------|
 | 1.0.0 | 2026-01-27 | Constantin | Version initiale |
 | 2.0.0 | 2026-01-27 | Constantin | Version BMAD Ultra-Complete |
+| 2.1.0 | 2026-01-27 | Constantin | **Amendments appliqués** : AMD-001 (Freemium), AMD-002 (Recherche V1), AMD-003 (Limites techniques), AMD-004 (Secrets), AMD-005 (Managed IA V1.1), AMD-006 (Flux prioritaires), AMD-007 (org_id), AMD-008 (Coûts), AMD-009 (RGPD), AMD-010 (Monitoring), AMD-011 (Rule debugger), AMD-012 (Benchmark Expo), AMD-013 (Migration Inoreader) |
 
 ### D. Raccourcis Clavier (Référence Complète)
 
