@@ -3,3 +3,39 @@
 
 # BMAD
 _bmad
+
+# Rust
+target/
+Cargo.lock
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Node.js
+node_modules/
+.npm
+*.tsbuildinfo
+
+# Next.js
+apps/web/.next/
+apps/web/out/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
