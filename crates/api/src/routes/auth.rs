@@ -1,15 +1,29 @@
 //! Authentication routes
 
-use axum::{
-    extract::State,
-    routing::post,
-    Json, Router,
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    Argon2,
 };
+use axum::{extract::State, routing::post, Json, Router};
+use chrono::{Duration, Utc};
+use jsonwebtoken::{encode, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+use uuid::Uuid;
 use validator::Validate;
 
 use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
+
+/// JWT Claims
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Claims {
+    pub sub: String, // User ID
+    pub email: String,
+    pub tier: String,
+    pub exp: i64, // Expiration timestamp
+    pub iat: i64, // Issued at
+}
 
 /// Register request
 #[derive(Debug, Deserialize, Validate)]
@@ -18,6 +32,7 @@ pub struct RegisterRequest {
     pub email: String,
     #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
     pub password: String,
+    pub display_name: Option<String>,
 }
 
 /// Login request
@@ -37,6 +52,7 @@ pub struct AuthResponse {
 #[derive(Serialize)]
 pub struct AuthData {
     pub token: String,
+    pub expires_at: String,
     pub user: UserData,
 }
 
@@ -44,48 +60,232 @@ pub struct AuthData {
 pub struct UserData {
     pub id: String,
     pub email: String,
+    pub display_name: Option<String>,
     pub tier: String,
+}
+
+/// Database user row
+#[derive(FromRow)]
+struct UserRow {
+    id: Uuid,
+    email: String,
+    password_hash: String,
+    display_name: Option<String>,
+    tier: String,
 }
 
 /// Register new user
 async fn register(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(req): Json<RegisterRequest>,
 ) -> ApiResult<Json<AuthResponse>> {
     // Validate request
     req.validate()
         .map_err(|e| ApiError::Validation(e.to_string()))?;
 
-    // TODO: Implement user registration
-    // 1. Check if email exists
-    // 2. Hash password with argon2
-    // 3. Create user in database
-    // 4. Generate JWT token
+    let email = req.email.to_lowercase();
 
-    Err(ApiError::Internal("Not implemented".to_string()))
+    // Check if email exists
+    let exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1 AND deleted_at IS NULL)",
+    )
+    .bind(&email)
+    .fetch_one(state.db())
+    .await
+    .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+
+    if exists {
+        return Err(ApiError::Conflict("Email already registered".to_string()));
+    }
+
+    // Hash password with argon2
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    let password_hash = argon2
+        .hash_password(req.password.as_bytes(), &salt)
+        .map_err(|e| ApiError::Internal(format!("Password hashing failed: {}", e)))?
+        .to_string();
+
+    // Create user in database
+    let user: UserRow = sqlx::query_as(
+        r#"
+        INSERT INTO users (email, password_hash, display_name, tier)
+        VALUES ($1, $2, $3, 'free')
+        RETURNING id, email, password_hash, display_name, tier
+        "#,
+    )
+    .bind(&email)
+    .bind(&password_hash)
+    .bind(&req.display_name)
+    .fetch_one(state.db())
+    .await
+    .map_err(|e| ApiError::Internal(format!("Failed to create user: {}", e)))?;
+
+    // Generate JWT token
+    let (token, expires_at) = generate_jwt(&user, state.jwt_secret(), state.jwt_expiration())?;
+
+    // Update last login
+    let _ = sqlx::query("UPDATE users SET last_login_at = NOW() WHERE id = $1")
+        .bind(user.id)
+        .execute(state.db())
+        .await;
+
+    Ok(Json(AuthResponse {
+        data: AuthData {
+            token,
+            expires_at: expires_at.to_rfc3339(),
+            user: UserData {
+                id: user.id.to_string(),
+                email: user.email,
+                display_name: user.display_name,
+                tier: user.tier,
+            },
+        },
+    }))
 }
 
 /// Login user
 async fn login(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(req): Json<LoginRequest>,
 ) -> ApiResult<Json<AuthResponse>> {
     // Validate request
     req.validate()
         .map_err(|e| ApiError::Validation(e.to_string()))?;
 
-    // TODO: Implement login
-    // 1. Find user by email
-    // 2. Verify password with argon2
-    // 3. Generate JWT token
+    let email = req.email.to_lowercase();
 
-    Err(ApiError::Internal("Not implemented".to_string()))
+    // Find user by email
+    let user: Option<UserRow> = sqlx::query_as(
+        "SELECT id, email, password_hash, display_name, tier FROM users WHERE email = $1 AND deleted_at IS NULL"
+    )
+    .bind(&email)
+    .fetch_optional(state.db())
+    .await
+    .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+
+    let user =
+        user.ok_or_else(|| ApiError::Unauthorized("Invalid email or password".to_string()))?;
+
+    // Verify password with argon2
+    let parsed_hash = PasswordHash::new(&user.password_hash)
+        .map_err(|_| ApiError::Internal("Invalid password hash format".to_string()))?;
+
+    Argon2::default()
+        .verify_password(req.password.as_bytes(), &parsed_hash)
+        .map_err(|_| ApiError::Unauthorized("Invalid email or password".to_string()))?;
+
+    // Generate JWT token
+    let (token, expires_at) = generate_jwt(&user, state.jwt_secret(), state.jwt_expiration())?;
+
+    // Update last login
+    let _ = sqlx::query("UPDATE users SET last_login_at = NOW() WHERE id = $1")
+        .bind(user.id)
+        .execute(state.db())
+        .await;
+
+    Ok(Json(AuthResponse {
+        data: AuthData {
+            token,
+            expires_at: expires_at.to_rfc3339(),
+            user: UserData {
+                id: user.id.to_string(),
+                email: user.email,
+                display_name: user.display_name,
+                tier: user.tier,
+            },
+        },
+    }))
+}
+
+/// Refresh token
+async fn refresh(
+    State(state): State<AppState>,
+    claims: crate::extractors::auth::CurrentUser,
+) -> ApiResult<Json<AuthResponse>> {
+    // Get fresh user data
+    let user: UserRow = sqlx::query_as(
+        "SELECT id, email, password_hash, display_name, tier FROM users WHERE id = $1 AND deleted_at IS NULL"
+    )
+    .bind(claims.id)
+    .fetch_optional(state.db())
+    .await
+    .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+    .ok_or_else(|| ApiError::Unauthorized("User not found".to_string()))?;
+
+    // Generate new JWT token
+    let (token, expires_at) = generate_jwt(&user, state.jwt_secret(), state.jwt_expiration())?;
+
+    Ok(Json(AuthResponse {
+        data: AuthData {
+            token,
+            expires_at: expires_at.to_rfc3339(),
+            user: UserData {
+                id: user.id.to_string(),
+                email: user.email,
+                display_name: user.display_name,
+                tier: user.tier,
+            },
+        },
+    }))
 }
 
 /// Logout (invalidate token)
 async fn logout() -> ApiResult<Json<serde_json::Value>> {
-    // TODO: Add token to blacklist in Redis
+    // In a stateless JWT system, logout is handled client-side
+    // For enhanced security, we could add the token to a Redis blacklist
     Ok(Json(serde_json::json!({ "data": { "success": true } })))
+}
+
+/// Get current user
+async fn me(
+    State(state): State<AppState>,
+    claims: crate::extractors::auth::CurrentUser,
+) -> ApiResult<Json<serde_json::Value>> {
+    let user: UserRow = sqlx::query_as(
+        "SELECT id, email, password_hash, display_name, tier FROM users WHERE id = $1 AND deleted_at IS NULL"
+    )
+    .bind(claims.id)
+    .fetch_optional(state.db())
+    .await
+    .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+    .ok_or_else(|| ApiError::NotFound("User not found".to_string()))?;
+
+    Ok(Json(serde_json::json!({
+        "data": {
+            "id": user.id.to_string(),
+            "email": user.email,
+            "display_name": user.display_name,
+            "tier": user.tier
+        }
+    })))
+}
+
+/// Generate JWT token
+fn generate_jwt(
+    user: &UserRow,
+    secret: &str,
+    expiration_secs: u64,
+) -> ApiResult<(String, chrono::DateTime<Utc>)> {
+    let now = Utc::now();
+    let expires_at = now + Duration::seconds(expiration_secs as i64);
+
+    let claims = Claims {
+        sub: user.id.to_string(),
+        email: user.email.clone(),
+        tier: user.tier.clone(),
+        exp: expires_at.timestamp(),
+        iat: now.timestamp(),
+    };
+
+    let token = encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret.as_bytes()),
+    )
+    .map_err(|e| ApiError::Internal(format!("JWT encoding failed: {}", e)))?;
+
+    Ok((token, expires_at))
 }
 
 /// Build auth routes
@@ -93,5 +293,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/auth/register", post(register))
         .route("/api/v1/auth/login", post(login))
+        .route("/api/v1/auth/refresh", post(refresh))
         .route("/api/v1/auth/logout", post(logout))
+        .route("/api/v1/auth/me", axum::routing::get(me))
 }

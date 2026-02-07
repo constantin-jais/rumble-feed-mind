@@ -1,9 +1,11 @@
 //! Redis-based job queue consumer
 
+use feedmind_core::feed::FeedFetcher;
 use redis::aio::ConnectionManager;
+use regex::Regex;
 use sqlx::postgres::PgPoolOptions;
-use sqlx::PgPool;
-use tracing::{error, info};
+use sqlx::{FromRow, PgPool};
+use tracing::{error, info, warn};
 
 use crate::config::WorkerConfig;
 use crate::jobs::{Job, JobType};
@@ -13,6 +15,24 @@ pub struct QueueConsumer {
     redis: ConnectionManager,
     db: PgPool,
     concurrent_fetches: usize,
+    fetcher: FeedFetcher,
+}
+
+/// Feed row from database
+#[derive(FromRow)]
+struct FeedRow {
+    id: uuid::Uuid,
+    user_id: uuid::Uuid,
+    url: String,
+}
+
+/// Rule row from database
+#[derive(FromRow)]
+struct RuleRow {
+    id: uuid::Uuid,
+    config: serde_json::Value,
+    action: String,
+    stop_on_match: bool,
 }
 
 impl QueueConsumer {
@@ -28,10 +48,14 @@ impl QueueConsumer {
         let redis_client = redis::Client::open(config.redis_url.as_str())?;
         let redis = ConnectionManager::new(redis_client).await?;
 
+        // Create feed fetcher
+        let fetcher = FeedFetcher::new()?;
+
         Ok(Self {
             redis,
             db,
             concurrent_fetches: config.concurrent_fetches,
+            fetcher,
         })
     }
 
@@ -98,82 +122,303 @@ impl QueueConsumer {
         Ok(Some(job))
     }
 
-    /// Fetch a single feed
+    /// Fetch a single feed and insert new articles
     async fn process_fetch_feed(&self, feed_id: uuid::Uuid) -> anyhow::Result<()> {
         info!(%feed_id, "Fetching feed");
 
-        // TODO: Implement
-        // 1. Get feed URL from database
-        // 2. Fetch and parse feed
-        // 3. Deduplicate articles
-        // 4. Insert new articles
-        // 5. Queue rule evaluation for new articles
-        // 6. Update feed last_fetched_at
+        // Get feed URL from database
+        let feed: Option<FeedRow> =
+            sqlx::query_as("SELECT id, user_id, url FROM feeds WHERE id = $1")
+                .bind(feed_id)
+                .fetch_optional(&self.db)
+                .await?;
+
+        let Some(feed) = feed else {
+            warn!(%feed_id, "Feed not found");
+            return Ok(());
+        };
+
+        // Fetch and parse feed
+        let result = self.fetcher.fetch(&feed.url).await;
+
+        match result {
+            Ok((_feed_meta, items)) => {
+                info!(%feed_id, count = items.len(), "Fetched articles");
+
+                // Insert new articles (deduplicate by guid)
+                let mut new_article_ids = Vec::new();
+
+                for item in items {
+                    // Calculate word count
+                    let word_count = item
+                        .content
+                        .as_ref()
+                        .or(item.summary.as_ref())
+                        .map(|text| text.split_whitespace().count() as i32);
+
+                    // Insert with ON CONFLICT DO NOTHING
+                    let result: Option<(uuid::Uuid,)> = sqlx::query_as(
+                        r#"
+                        INSERT INTO articles (feed_id, user_id, guid, url, title, author, summary, content, published_at, word_count)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                        ON CONFLICT (feed_id, guid) DO NOTHING
+                        RETURNING id
+                        "#
+                    )
+                    .bind(feed.id)
+                    .bind(feed.user_id)
+                    .bind(&item.guid)
+                    .bind(&item.url)
+                    .bind(&item.title)
+                    .bind(&item.author)
+                    .bind(&item.summary)
+                    .bind(&item.content)
+                    .bind(item.published_at)
+                    .bind(word_count)
+                    .fetch_optional(&self.db)
+                    .await?;
+
+                    if let Some((id,)) = result {
+                        new_article_ids.push(id);
+                    }
+                }
+
+                info!(%feed_id, new_count = new_article_ids.len(), "Inserted new articles");
+
+                // Update feed last_fetched_at
+                sqlx::query(
+                    "UPDATE feeds SET last_fetched_at = NOW(), last_successful_fetch_at = NOW(), error_count = 0, last_error = NULL WHERE id = $1"
+                )
+                .bind(feed_id)
+                .execute(&self.db)
+                .await?;
+
+                // Queue rule evaluation for new articles
+                if !new_article_ids.is_empty() {
+                    let job = Job::new(JobType::EvaluateRules {
+                        article_ids: new_article_ids,
+                    });
+                    let mut redis = self.redis.clone();
+                    enqueue_job(&mut redis, &job).await?;
+                }
+            }
+            Err(e) => {
+                warn!(%feed_id, error = %e, "Failed to fetch feed");
+
+                sqlx::query(
+                    "UPDATE feeds SET last_fetched_at = NOW(), error_count = error_count + 1, last_error = $2, last_error_at = NOW() WHERE id = $1"
+                )
+                .bind(feed_id)
+                .bind(e.to_string())
+                .execute(&self.db)
+                .await?;
+            }
+        }
 
         Ok(())
     }
 
     /// Evaluate rules for articles
     async fn process_evaluate_rules(&self, article_ids: &[uuid::Uuid]) -> anyhow::Result<()> {
+        if article_ids.is_empty() {
+            return Ok(());
+        }
+
         info!(count = article_ids.len(), "Evaluating rules for articles");
 
-        // TODO: Implement
-        // 1. Get user rules
-        // 2. Get articles
-        // 3. Evaluate each rule against each article
-        // 4. Apply actions (hide, tag, etc.)
-        // 5. Store evaluation results for explainability
+        // Get user_id from first article
+        let user_id: Option<uuid::Uuid> =
+            sqlx::query_scalar("SELECT user_id FROM articles WHERE id = $1")
+                .bind(article_ids[0])
+                .fetch_optional(&self.db)
+                .await?;
+
+        let Some(user_id) = user_id else {
+            return Ok(());
+        };
+
+        // Get active regex rules for this user
+        let rules: Vec<RuleRow> = sqlx::query_as(
+            r#"
+            SELECT id, config, action, stop_on_match
+            FROM rules
+            WHERE user_id = $1 AND is_active = TRUE AND rule_type = 'regex'
+            ORDER BY priority DESC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.db)
+        .await?;
+
+        if rules.is_empty() {
+            return Ok(());
+        }
+
+        // Get articles
+        let articles: Vec<(uuid::Uuid, String, Option<String>, Option<String>)> =
+            sqlx::query_as("SELECT id, title, summary, content FROM articles WHERE id = ANY($1)")
+                .bind(article_ids)
+                .fetch_all(&self.db)
+                .await?;
+
+        // Compile regexes
+        let compiled_rules: Vec<_> = rules
+            .iter()
+            .filter_map(|rule| {
+                let pattern = rule.config.get("pattern")?.as_str()?;
+                let case_sensitive = rule
+                    .config
+                    .get("case_sensitive")
+                    .and_then(|c| c.as_bool())
+                    .unwrap_or(false);
+
+                let regex = if case_sensitive {
+                    Regex::new(pattern).ok()?
+                } else {
+                    Regex::new(&format!("(?i){}", pattern)).ok()?
+                };
+
+                Some((rule, regex))
+            })
+            .collect();
+
+        // Evaluate each article
+        for (article_id, title, summary, content) in &articles {
+            let text = format!(
+                "{} {} {}",
+                title,
+                summary.as_deref().unwrap_or(""),
+                content.as_deref().unwrap_or("")
+            );
+
+            for (rule, regex) in &compiled_rules {
+                if let Some(matched) = regex.find(&text) {
+                    info!(%article_id, rule_id = %rule.id, "Rule matched");
+
+                    // Apply action
+                    match rule.action.as_str() {
+                        "hide" => {
+                            sqlx::query(
+                                "UPDATE articles SET is_hidden = TRUE, hidden_at = NOW(), hidden_by_rule_id = $2 WHERE id = $1"
+                            )
+                            .bind(article_id)
+                            .bind(rule.id)
+                            .execute(&self.db)
+                            .await?;
+                        }
+                        "star" => {
+                            sqlx::query(
+                                "UPDATE articles SET is_starred = TRUE, starred_at = NOW() WHERE id = $1"
+                            )
+                            .bind(article_id)
+                            .execute(&self.db)
+                            .await?;
+                        }
+                        "mark_read" => {
+                            sqlx::query(
+                                "UPDATE articles SET is_read = TRUE, read_at = NOW() WHERE id = $1",
+                            )
+                            .bind(article_id)
+                            .execute(&self.db)
+                            .await?;
+                        }
+                        _ => {}
+                    }
+
+                    // Store for explainability
+                    let _ = sqlx::query(
+                        r#"
+                        INSERT INTO rule_evaluations (article_id, rule_id, matched, matched_text, action_taken)
+                        VALUES ($1, $2, TRUE, $3, $4)
+                        ON CONFLICT (article_id, rule_id) DO NOTHING
+                        "#
+                    )
+                    .bind(article_id)
+                    .bind(rule.id)
+                    .bind(matched.as_str())
+                    .bind(&rule.action)
+                    .execute(&self.db)
+                    .await;
+
+                    // Update rule match count
+                    let _ = sqlx::query(
+                        "UPDATE rules SET match_count = match_count + 1, last_match_at = NOW() WHERE id = $1"
+                    )
+                    .bind(rule.id)
+                    .execute(&self.db)
+                    .await;
+
+                    if rule.stop_on_match {
+                        break;
+                    }
+                }
+            }
+        }
 
         Ok(())
     }
 
-    /// Refresh all feeds that need updating
+    /// Refresh all feeds based on priority
     async fn process_refresh_all(&self) -> anyhow::Result<()> {
         info!("Refreshing all feeds");
 
-        // TODO: Implement
-        // 1. Get feeds that need refresh (based on smart polling)
-        // 2. Queue FetchFeed jobs for each
-        // 3. Respect concurrent_fetches limit
+        let feeds: Vec<(uuid::Uuid,)> = sqlx::query_as(
+            r#"
+            SELECT id FROM feeds
+            WHERE error_count < 5
+            AND (
+                (priority = 'hot' AND (last_fetched_at IS NULL OR last_fetched_at < NOW() - INTERVAL '15 minutes'))
+                OR (priority = 'warm' AND (last_fetched_at IS NULL OR last_fetched_at < NOW() - INTERVAL '1 hour'))
+                OR (priority = 'cold' AND (last_fetched_at IS NULL OR last_fetched_at < NOW() - INTERVAL '4 hours'))
+            )
+            ORDER BY last_fetched_at ASC NULLS FIRST
+            LIMIT $1
+            "#
+        )
+        .bind(self.concurrent_fetches as i64)
+        .fetch_all(&self.db)
+        .await?;
 
-        let _ = self.concurrent_fetches; // Use field to suppress warning
+        info!(count = feeds.len(), "Found feeds to refresh");
+
+        let mut redis = self.redis.clone();
+        for (feed_id,) in feeds {
+            let job = Job::new(JobType::FetchFeed { feed_id });
+            enqueue_job(&mut redis, &job).await?;
+        }
 
         Ok(())
     }
 
-    /// Clean up old articles
+    /// Clean up old read articles
     async fn process_cleanup(&self, retention_days: u32) -> anyhow::Result<()> {
         info!(retention_days, "Cleaning up old articles");
 
-        // TODO: Implement
-        // 1. Delete read articles older than retention_days
-        // 2. Delete orphaned data (tags, evaluations)
+        let result = sqlx::query(
+            "DELETE FROM articles WHERE is_read = TRUE AND created_at < NOW() - make_interval(days => $1)"
+        )
+        .bind(retention_days as i32)
+        .execute(&self.db)
+        .await?;
 
+        info!(deleted = result.rows_affected(), "Deleted old articles");
         Ok(())
     }
 
     /// Export user data (GDPR)
     async fn process_export_user_data(&self, user_id: uuid::Uuid) -> anyhow::Result<()> {
-        info!(%user_id, "Exporting user data");
-
-        // TODO: Implement
-        // 1. Gather all user data (feeds, articles, rules, settings)
-        // 2. Create ZIP archive
-        // 3. Upload to temporary storage
-        // 4. Send notification email with download link
-
+        info!(%user_id, "Exporting user data - not implemented");
         Ok(())
     }
 
     /// Delete user data (GDPR)
     async fn process_delete_user_data(&self, user_id: uuid::Uuid) -> anyhow::Result<()> {
         info!(%user_id, "Deleting user data");
-
-        // TODO: Implement
-        // 1. Delete all user data
-        // 2. Anonymize logs
-        // 3. Send confirmation email
-
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&self.db)
+            .await?;
+        info!(%user_id, "User data deleted");
         Ok(())
     }
 
@@ -183,12 +428,7 @@ impl QueueConsumer {
         to: &str,
         template: &crate::jobs::EmailTemplate,
     ) -> anyhow::Result<()> {
-        info!(to, ?template, "Sending email");
-
-        // TODO: Implement with Resend or similar provider
-        // 1. Render template
-        // 2. Send via email provider
-
+        info!(to, ?template, "Sending email - not implemented");
         Ok(())
     }
 }

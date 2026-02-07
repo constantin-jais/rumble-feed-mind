@@ -45,3 +45,6 @@ chrono = { workspace = true }
 
 # Cron scheduler
 tokio-cron-scheduler = { workspace = true }
+
+# Regex
+regex = { workspace = true }

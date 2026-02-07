@@ -13,6 +13,16 @@ pub enum FeedType {
     JsonFeed,
 }
 
+impl std::fmt::Display for FeedType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FeedType::Rss => write!(f, "rss"),
+            FeedType::Atom => write!(f, "atom"),
+            FeedType::JsonFeed => write!(f, "json"),
+        }
+    }
+}
+
 /// Represents an RSS/Atom feed
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Feed {
