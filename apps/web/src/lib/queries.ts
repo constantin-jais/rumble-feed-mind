@@ -1,20 +1,35 @@
 // TanStack Query hooks for data fetching
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { feedsApi, articlesApi, rulesApi, authApi, setAuthToken } from "./api";
+import {
+  feedsApi,
+  foldersApi,
+  articlesApi,
+  rulesApi,
+  authApi,
+  settingsApi,
+  opmlApi,
+  setAuthToken,
+} from "./api";
 import { useAuthStore } from "./store";
-import type { Feed, Article, Rule } from "./api";
+import type { Feed, Folder, Article, Rule } from "./api";
 
 // Query keys
 export const queryKeys = {
   user: ["user"] as const,
   feeds: ["feeds"] as const,
   feed: (id: string) => ["feeds", id] as const,
-  articles: (params?: { feed_id?: string; folder_id?: string; status?: string }) =>
-    ["articles", params] as const,
+  folders: ["folders"] as const,
+  folder: (id: string) => ["folders", id] as const,
+  articles: (params?: {
+    feed_id?: string;
+    folder_id?: string;
+    status?: string;
+  }) => ["articles", params] as const,
   article: (id: string) => ["articles", id] as const,
   rules: ["rules"] as const,
   rule: (id: string) => ["rules", id] as const,
+  apiKeys: ["apiKeys"] as const,
 };
 
 // Auth hooks
@@ -37,13 +52,18 @@ export function useLogin() {
   const { setAuth } = useAuthStore();
 
   return useMutation({
-    mutationFn: async ({ email, password }: { email: string; password: string }) => {
+    mutationFn: async ({
+      email,
+      password,
+    }: {
+      email: string;
+      password: string;
+    }) => {
       const response = await authApi.login(email, password);
       return response.data;
     },
     onSuccess: (data) => {
-      setAuthToken(data.token);
-      setAuth(data.user, data.token);
+      setAuth(data.user, data.token, data.expires_at);
       queryClient.invalidateQueries({ queryKey: queryKeys.user });
     },
   });
@@ -67,8 +87,7 @@ export function useRegister() {
       return response.data;
     },
     onSuccess: (data) => {
-      setAuthToken(data.token);
-      setAuth(data.user, data.token);
+      setAuth(data.user, data.token, data.expires_at);
       queryClient.invalidateQueries({ queryKey: queryKeys.user });
     },
   });
@@ -326,6 +345,148 @@ export function useDeleteRule() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.rules });
+    },
+  });
+}
+
+// Settings hooks
+export function useApiKeys() {
+  const { isAuthenticated } = useAuthStore();
+
+  return useQuery({
+    queryKey: queryKeys.apiKeys,
+    queryFn: async () => {
+      const response = await settingsApi.getApiKeys();
+      return response.data;
+    },
+    enabled: isAuthenticated,
+  });
+}
+
+export function useUpdateApiKeys() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      anthropic_key?: string;
+      openai_key?: string;
+    }) => {
+      const response = await settingsApi.updateApiKeys(data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys });
+    },
+  });
+}
+
+export function useDeleteAccount() {
+  const queryClient = useQueryClient();
+  const { clearAuth } = useAuthStore();
+
+  return useMutation({
+    mutationFn: async () => {
+      await settingsApi.deleteAccount();
+    },
+    onSuccess: () => {
+      setAuthToken(null);
+      clearAuth();
+      queryClient.clear();
+    },
+  });
+}
+
+// OPML hooks
+export function useImportOpml() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const response = await opmlApi.import(file);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.feeds });
+      queryClient.invalidateQueries({ queryKey: queryKeys.folders });
+    },
+  });
+}
+
+// Folders hooks
+export function useFolders() {
+  return useQuery({
+    queryKey: queryKeys.folders,
+    queryFn: async () => {
+      const response = await foldersApi.list();
+      return response.data;
+    },
+  });
+}
+
+export function useFolder(id: string) {
+  return useQuery({
+    queryKey: queryKeys.folder(id),
+    queryFn: async () => {
+      const response = await foldersApi.get(id);
+      return response.data;
+    },
+    enabled: !!id,
+  });
+}
+
+export function useCreateFolder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      name,
+      parentId,
+    }: {
+      name: string;
+      parentId?: string;
+    }) => {
+      const response = await foldersApi.create(name, parentId);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.folders });
+    },
+  });
+}
+
+export function useUpdateFolder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...data
+    }: {
+      id: string;
+      name?: string;
+      parent_id?: string;
+      position?: number;
+    }) => {
+      const response = await foldersApi.update(id, data);
+      return response.data;
+    },
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.folders });
+      queryClient.invalidateQueries({ queryKey: queryKeys.folder(id) });
+    },
+  });
+}
+
+export function useDeleteFolder() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await foldersApi.delete(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.folders });
+      queryClient.invalidateQueries({ queryKey: queryKeys.feeds });
     },
   });
 }
