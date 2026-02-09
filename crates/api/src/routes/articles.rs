@@ -409,5 +409,5 @@ pub fn router() -> Router<AppState> {
             "/api/v1/articles/mark-all-read",
             axum::routing::post(mark_all_read),
         )
-        .route("/api/v1/articles/:id", get(get_article).put(update_article))
+        .route("/api/v1/articles/{id}", get(get_article).put(update_article))
 }
