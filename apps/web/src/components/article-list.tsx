@@ -2,20 +2,32 @@
 
 import { formatDistanceToNow } from "date-fns";
 import { Star, Circle, ExternalLink } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useArticles, useUpdateArticle } from "@/lib/queries";
 import { useUIStore } from "@/lib/store";
+import { ArticleCard } from "@/components/article-card";
 import type { Article } from "@/lib/api";
 
 export function ArticleList() {
-  const { selectedFeedId, selectedFolderId, articleFilter, selectedArticleId, setSelectedArticle } =
-    useUIStore();
+  const {
+    selectedFeedId,
+    selectedFolderId,
+    articleFilter,
+    selectedArticleId,
+    setSelectedArticle,
+    selectedCategories,
+    viewMode,
+  } = useUIStore();
 
   const { data, isLoading, error } = useArticles({
     feed_id: selectedFeedId ?? undefined,
     folder_id: selectedFolderId ?? undefined,
     status: articleFilter === "all" ? undefined : articleFilter,
+    categories: selectedCategories.length > 0 ? selectedCategories : undefined,
   });
+
+  const updateArticle = useUpdateArticle();
 
   if (isLoading) {
     return (
@@ -46,6 +58,42 @@ export function ArticleList() {
     );
   }
 
+  // Card view
+  if (viewMode === "card") {
+    return (
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {data.data.map((article) => (
+            <ArticleCard
+              key={article.id}
+              article={article}
+              isSelected={selectedArticleId === article.id}
+              onSelect={() => {
+                if (!article.is_read) {
+                  updateArticle.mutate({ id: article.id, is_read: true });
+                }
+                setSelectedArticle(article.id);
+              }}
+              onToggleRead={() => {
+                updateArticle.mutate({
+                  id: article.id,
+                  is_read: !article.is_read,
+                });
+              }}
+              onToggleStar={() => {
+                updateArticle.mutate({
+                  id: article.id,
+                  is_starred: !article.is_starred,
+                });
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // List view (default)
   return (
     <div className="flex-1 overflow-y-auto">
       {data.data.map((article) => (
@@ -132,6 +180,26 @@ function ArticleItem({
             <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
               {article.summary}
             </p>
+          )}
+
+          {/* Categories */}
+          {article.categories && article.categories.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {article.categories.slice(0, 3).map((category) => (
+                <Badge
+                  key={category}
+                  variant="secondary"
+                  className="text-[10px] px-1.5 py-0"
+                >
+                  {category}
+                </Badge>
+              ))}
+              {article.categories.length > 3 && (
+                <span className="text-[10px] text-muted-foreground">
+                  +{article.categories.length - 3}
+                </span>
+              )}
+            </div>
           )}
 
           {/* Meta */}

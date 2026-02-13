@@ -5,14 +5,17 @@ import {
   feedsApi,
   foldersApi,
   articlesApi,
+  categoriesApi,
   rulesApi,
+  rulesApiExtended,
+  tagsApi,
   authApi,
   settingsApi,
   opmlApi,
   setAuthToken,
 } from "./api";
 import { useAuthStore } from "./store";
-import type { Feed, Folder, Article, Rule } from "./api";
+import type { Feed, Folder, Article, Rule, Category, FeedCategory, FeedCategoryFilter, Tag, RuleConfig } from "./api";
 
 // Query keys
 export const queryKeys = {
@@ -25,10 +28,16 @@ export const queryKeys = {
     feed_id?: string;
     folder_id?: string;
     status?: string;
+    categories?: string[];
   }) => ["articles", params] as const,
   article: (id: string) => ["articles", id] as const,
+  articleTags: (articleId: string) => ["articles", articleId, "tags"] as const,
+  categories: ["categories"] as const,
+  feedCategories: (feedId: string) => ["categories", feedId] as const,
   rules: ["rules"] as const,
   rule: (id: string) => ["rules", id] as const,
+  tags: ["tags"] as const,
+  tag: (id: string) => ["tags", id] as const,
   apiKeys: ["apiKeys"] as const,
 };
 
@@ -165,6 +174,7 @@ export function useUpdateFeed() {
       title?: string;
       folder_id?: string;
       priority?: Feed["priority"];
+      category_filter?: FeedCategoryFilter | null;
     }) => {
       const response = await feedsApi.update(id, data);
       return response.data;
@@ -204,6 +214,7 @@ export function useArticles(params?: {
   feed_id?: string;
   folder_id?: string;
   status?: "unread" | "read" | "starred";
+  categories?: string[];
 }) {
   return useQuery({
     queryKey: queryKeys.articles(params),
@@ -282,6 +293,28 @@ export function useMarkAllRead() {
       queryClient.invalidateQueries({ queryKey: ["articles"] });
       queryClient.invalidateQueries({ queryKey: queryKeys.feeds });
     },
+  });
+}
+
+// Categories hooks
+export function useCategories() {
+  return useQuery({
+    queryKey: queryKeys.categories,
+    queryFn: async () => {
+      const response = await categoriesApi.list();
+      return response.data;
+    },
+  });
+}
+
+export function useFeedCategories(feedId: string) {
+  return useQuery({
+    queryKey: queryKeys.feedCategories(feedId),
+    queryFn: async () => {
+      const response = await categoriesApi.listForFeed(feedId);
+      return response.data;
+    },
+    enabled: !!feedId,
   });
 }
 
@@ -487,6 +520,163 @@ export function useDeleteFolder() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.folders });
       queryClient.invalidateQueries({ queryKey: queryKeys.feeds });
+    },
+  });
+}
+
+// Tags hooks
+export function useTags() {
+  return useQuery({
+    queryKey: queryKeys.tags,
+    queryFn: async () => {
+      const response = await tagsApi.list();
+      return response.data;
+    },
+  });
+}
+
+export function useTag(id: string) {
+  return useQuery({
+    queryKey: queryKeys.tag(id),
+    queryFn: async () => {
+      const response = await tagsApi.get(id);
+      return response.data;
+    },
+    enabled: !!id,
+  });
+}
+
+export function useCreateTag() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: { name: string; color?: string }) => {
+      const response = await tagsApi.create(data);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+    },
+  });
+}
+
+export function useUpdateTag() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      ...data
+    }: {
+      id: string;
+      name?: string;
+      color?: string;
+    }) => {
+      const response = await tagsApi.update(id, data);
+      return response.data;
+    },
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tag(id) });
+    },
+  });
+}
+
+export function useDeleteTag() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await tagsApi.delete(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+    },
+  });
+}
+
+export function useArticleTags(articleId: string) {
+  return useQuery({
+    queryKey: queryKeys.articleTags(articleId),
+    queryFn: async () => {
+      const response = await tagsApi.getArticleTags(articleId);
+      return response.data;
+    },
+    enabled: !!articleId,
+  });
+}
+
+export function useAddTagToArticle() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      articleId,
+      tagId,
+    }: {
+      articleId: string;
+      tagId: string;
+    }) => {
+      const response = await tagsApi.addTagToArticle(articleId, tagId);
+      return response.data;
+    },
+    onSuccess: (_, { articleId }) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.articleTags(articleId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+    },
+  });
+}
+
+export function useRemoveTagFromArticle() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      articleId,
+      tagId,
+    }: {
+      articleId: string;
+      tagId: string;
+    }) => {
+      await tagsApi.removeTagFromArticle(articleId, tagId);
+    },
+    onSuccess: (_, { articleId }) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.articleTags(articleId),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags });
+    },
+  });
+}
+
+// Rule preview hook
+export function usePreviewRule() {
+  return useMutation({
+    mutationFn: async (data: {
+      config: RuleConfig;
+      feed_id?: string;
+      folder_id?: string;
+      limit?: number;
+    }) => {
+      const response = await rulesApiExtended.preview(data);
+      return response.data;
+    },
+  });
+}
+
+export function useToggleRule() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      const response = await rulesApiExtended.toggle(id, isActive);
+      return response.data;
+    },
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.rules });
+      queryClient.invalidateQueries({ queryKey: queryKeys.rule(id) });
     },
   });
 }
