@@ -59,5 +59,8 @@ jsonwebtoken = { workspace = true }
 base64 = { workspace = true }
 regex = { workspace = true }
 
+# HTTP client (for feed discovery)
+reqwest = { workspace = true }
+
 [dev-dependencies]
 axum-test = "16"
