@@ -49,8 +49,9 @@ import {
   useDeleteFeed,
   useRefreshFeed,
   useCreateFolder,
+  useFeedCategories,
 } from "@/lib/queries";
-import type { Feed, Folder as FolderType } from "@/lib/api";
+import type { Feed, Folder as FolderType, FeedCategoryFilter } from "@/lib/api";
 
 // Group feeds by folder
 interface FeedGroup {
@@ -565,23 +566,48 @@ function EditFeedDialog({
 }) {
   const [title, setTitle] = useState(feed.title);
   const [folderId, setFolderId] = useState<string>(feed.folder_id ?? "none");
+  const [filterEnabled, setFilterEnabled] = useState(!!feed.category_filter);
+  const [filterMode, setFilterMode] = useState<"include" | "exclude">(
+    feed.category_filter?.mode ?? "include"
+  );
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(
+    feed.category_filter?.categories ?? []
+  );
 
   const updateFeed = useUpdateFeed();
+  const { data: feedCategories = [] } = useFeedCategories(feed.id);
 
   // Reset form when feed changes
   useState(() => {
     setTitle(feed.title);
     setFolderId(feed.folder_id ?? "none");
+    setFilterEnabled(!!feed.category_filter);
+    setFilterMode(feed.category_filter?.mode ?? "include");
+    setSelectedCategories(feed.category_filter?.categories ?? []);
   });
+
+  const toggleCategory = (category: string) => {
+    setSelectedCategories((prev) =>
+      prev.includes(category)
+        ? prev.filter((c) => c !== category)
+        : [...prev, category]
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const categoryFilter: FeedCategoryFilter | undefined =
+      filterEnabled && selectedCategories.length > 0
+        ? { mode: filterMode, categories: selectedCategories }
+        : undefined;
 
     try {
       await updateFeed.mutateAsync({
         id: feed.id,
         title: title.trim(),
         folder_id: folderId === "none" ? undefined : folderId,
+        category_filter: categoryFilter ?? null,
       });
       onOpenChange(false);
     } catch {
@@ -591,11 +617,11 @@ function EditFeedDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Edit Feed</DialogTitle>
           <DialogDescription>
-            Update the title or folder for this feed.
+            Update the title, folder, or category filter for this feed.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -624,6 +650,91 @@ function EditFeedDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {/* Category Filter Section */}
+          {feedCategories.length > 0 && (
+            <div className="space-y-3 pt-2 border-t">
+              <div className="flex items-center justify-between">
+                <Label>Category Filter</Label>
+                <button
+                  type="button"
+                  onClick={() => setFilterEnabled(!filterEnabled)}
+                  className={cn(
+                    "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                    filterEnabled ? "bg-primary" : "bg-muted"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-background shadow ring-0 transition-transform",
+                      filterEnabled ? "translate-x-4" : "translate-x-0"
+                    )}
+                  />
+                </button>
+              </div>
+
+              {filterEnabled && (
+                <>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFilterMode("include")}
+                      className={cn(
+                        "flex-1 px-3 py-1.5 text-sm rounded-md border transition-colors",
+                        filterMode === "include"
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background hover:bg-muted border-border"
+                      )}
+                    >
+                      Include only
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFilterMode("exclude")}
+                      className={cn(
+                        "flex-1 px-3 py-1.5 text-sm rounded-md border transition-colors",
+                        filterMode === "exclude"
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background hover:bg-muted border-border"
+                      )}
+                    >
+                      Exclude
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2 bg-muted/50 rounded-md">
+                    {feedCategories.map((cat) => (
+                      <button
+                        key={cat.category}
+                        type="button"
+                        onClick={() => toggleCategory(cat.category)}
+                        className={cn(
+                          "px-2 py-0.5 text-xs rounded-full border transition-colors",
+                          selectedCategories.includes(cat.category)
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background hover:bg-muted border-border"
+                        )}
+                      >
+                        {cat.category}
+                        <span className="ml-1 opacity-60">
+                          ({cat.article_count})
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {selectedCategories.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {filterMode === "include"
+                        ? `Only articles with these ${selectedCategories.length} categories will be imported.`
+                        : `Articles with these ${selectedCategories.length} categories will be skipped.`}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           <div className="text-xs text-muted-foreground">
             Feed URL: {feed.url}
           </div>

@@ -20,6 +20,7 @@ pub struct ListArticlesQuery {
     pub folder_id: Option<Uuid>,
     pub status: Option<String>,
     pub search: Option<String>,
+    pub categories: Option<String>, // Comma-separated list of categories
     pub cursor: Option<String>,
     pub limit: Option<i64>,
 }
@@ -74,6 +75,7 @@ pub struct ArticleListItem {
     pub is_read: bool,
     pub is_starred: bool,
     pub word_count: Option<i32>,
+    pub categories: sqlx::types::Json<Vec<String>>,
 }
 
 #[derive(Serialize)]
@@ -102,29 +104,54 @@ async fn list_articles(
 ) -> ApiResult<Json<ArticlesListResponse>> {
     let limit = query.limit.unwrap_or(50).min(100);
 
-    // Build query based on filters
-    let articles: Vec<ArticleListItem> = match (query.feed_id, query.folder_id, &query.status) {
-        (Some(feed_id), _, _) => {
-            // Filter by feed
-            let status_filter = match query.status.as_deref() {
-                Some("unread") => "AND a.is_read = FALSE AND a.is_hidden = FALSE",
-                Some("read") => "AND a.is_read = TRUE",
-                Some("starred") => "AND a.is_starred = TRUE",
-                Some("hidden") => "AND a.is_hidden = TRUE",
-                _ => "AND a.is_hidden = FALSE",
-            };
+    // Build status filter
+    let status_filter = match query.status.as_deref() {
+        Some("unread") => "AND a.is_read = FALSE AND a.is_hidden = FALSE",
+        Some("read") => "AND a.is_read = TRUE",
+        Some("starred") => "AND a.is_starred = TRUE",
+        Some("hidden") => "AND a.is_hidden = TRUE",
+        _ => "AND a.is_hidden = FALSE",
+    };
 
+    // Build category filter (using ?| operator for "any of" matching)
+    let category_filter = if let Some(ref cats) = query.categories {
+        let categories: Vec<&str> = cats
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if !categories.is_empty() {
+            format!(
+                "AND a.categories ?| ARRAY[{}]",
+                categories
+                    .iter()
+                    .map(|c| format!("'{}'", c.replace('\'', "''")))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
+    // Build query based on filters
+    let articles: Vec<ArticleListItem> = match (query.feed_id, query.folder_id) {
+        (Some(feed_id), _) => {
+            // Filter by feed
             sqlx::query_as(&format!(
                 r#"
                 SELECT a.id, a.feed_id, f.title as feed_title, a.url, a.title, a.author,
-                       a.summary, a.image_url, a.published_at, a.is_read, a.is_starred, a.word_count
+                       a.summary, a.image_url, a.published_at, a.is_read, a.is_starred, a.word_count,
+                       a.categories
                 FROM articles a
                 JOIN feeds f ON f.id = a.feed_id
-                WHERE a.user_id = $1 AND a.feed_id = $2 {}
+                WHERE a.user_id = $1 AND a.feed_id = $2 {} {}
                 ORDER BY a.published_at DESC NULLS LAST
                 LIMIT $3
                 "#,
-                status_filter
+                status_filter, category_filter
             ))
             .bind(user.id)
             .bind(feed_id)
@@ -132,26 +159,20 @@ async fn list_articles(
             .fetch_all(state.db())
             .await
         }
-        (_, Some(folder_id), _) => {
+        (_, Some(folder_id)) => {
             // Filter by folder
-            let status_filter = match query.status.as_deref() {
-                Some("unread") => "AND a.is_read = FALSE AND a.is_hidden = FALSE",
-                Some("read") => "AND a.is_read = TRUE",
-                Some("starred") => "AND a.is_starred = TRUE",
-                _ => "AND a.is_hidden = FALSE",
-            };
-
             sqlx::query_as(&format!(
                 r#"
                 SELECT a.id, a.feed_id, f.title as feed_title, a.url, a.title, a.author,
-                       a.summary, a.image_url, a.published_at, a.is_read, a.is_starred, a.word_count
+                       a.summary, a.image_url, a.published_at, a.is_read, a.is_starred, a.word_count,
+                       a.categories
                 FROM articles a
                 JOIN feeds f ON f.id = a.feed_id
-                WHERE a.user_id = $1 AND f.folder_id = $2 {}
+                WHERE a.user_id = $1 AND f.folder_id = $2 {} {}
                 ORDER BY a.published_at DESC NULLS LAST
                 LIMIT $3
                 "#,
-                status_filter
+                status_filter, category_filter
             ))
             .bind(user.id)
             .bind(folder_id)
@@ -161,24 +182,18 @@ async fn list_articles(
         }
         _ => {
             // All articles
-            let status_filter = match query.status.as_deref() {
-                Some("unread") => "AND a.is_read = FALSE AND a.is_hidden = FALSE",
-                Some("read") => "AND a.is_read = TRUE",
-                Some("starred") => "AND a.is_starred = TRUE",
-                _ => "AND a.is_hidden = FALSE",
-            };
-
             sqlx::query_as(&format!(
                 r#"
                 SELECT a.id, a.feed_id, f.title as feed_title, a.url, a.title, a.author,
-                       a.summary, a.image_url, a.published_at, a.is_read, a.is_starred, a.word_count
+                       a.summary, a.image_url, a.published_at, a.is_read, a.is_starred, a.word_count,
+                       a.categories
                 FROM articles a
                 JOIN feeds f ON f.id = a.feed_id
-                WHERE a.user_id = $1 {}
+                WHERE a.user_id = $1 {} {}
                 ORDER BY a.published_at DESC NULLS LAST
                 LIMIT $2
                 "#,
-                status_filter
+                status_filter, category_filter
             ))
             .bind(user.id)
             .bind(limit)
@@ -409,5 +424,8 @@ pub fn router() -> Router<AppState> {
             "/api/v1/articles/mark-all-read",
             axum::routing::post(mark_all_read),
         )
-        .route("/api/v1/articles/{id}", get(get_article).put(update_article))
+        .route(
+            "/api/v1/articles/{id}",
+            get(get_article).put(update_article),
+        )
 }

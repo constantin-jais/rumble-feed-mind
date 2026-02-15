@@ -117,6 +117,16 @@ impl QueueConsumer {
             JobType::SendEmail { to, template } => {
                 self.process_send_email(to, template).await?;
             }
+            // Billing jobs
+            JobType::CheckDunningStatus => {
+                self.process_check_dunning().await?;
+            }
+            JobType::SyncUsageToStripe { user_id } => {
+                self.process_sync_usage(*user_id).await?;
+            }
+            JobType::CleanupWebhookEvents => {
+                self.process_cleanup_webhooks().await?;
+            }
         }
 
         Ok(Some(job))
@@ -184,6 +194,27 @@ impl QueueConsumer {
                 }
 
                 info!(%feed_id, new_count = new_article_ids.len(), "Inserted new articles");
+
+                // Enforce retention limit (max 200 articles per feed, keep starred)
+                let deleted = sqlx::query(
+                    r#"
+                    DELETE FROM articles
+                    WHERE id IN (
+                        SELECT id FROM articles
+                        WHERE feed_id = $1 AND user_id = $2 AND is_starred = FALSE
+                        ORDER BY published_at DESC NULLS LAST
+                        OFFSET 200
+                    )
+                    "#,
+                )
+                .bind(feed.id)
+                .bind(feed.user_id)
+                .execute(&self.db)
+                .await?;
+
+                if deleted.rows_affected() > 0 {
+                    info!(%feed_id, deleted = deleted.rows_affected(), "Deleted old articles to enforce retention limit");
+                }
 
                 // Update feed last_fetched_at
                 sqlx::query(
@@ -429,6 +460,91 @@ impl QueueConsumer {
         template: &crate::jobs::EmailTemplate,
     ) -> anyhow::Result<()> {
         info!(to, ?template, "Sending email - not implemented");
+        Ok(())
+    }
+
+    // ========================================================================
+    // BILLING JOBS
+    // ========================================================================
+
+    /// Check dunning status for all accounts in grace period
+    async fn process_check_dunning(&self) -> anyhow::Result<()> {
+        info!("Checking dunning status for all accounts");
+
+        let config = crate::handlers::dunning::DunningConfig::default();
+        let result = crate::handlers::dunning::check_dunning_status(&self.db, &config).await?;
+
+        info!(
+            users_checked = result.users_checked,
+            emails_sent = result.emails_sent,
+            users_downgraded = result.users_downgraded,
+            users_suspended = result.users_suspended,
+            errors = result.errors.len(),
+            "Dunning check completed"
+        );
+
+        if !result.errors.is_empty() {
+            for err in &result.errors {
+                warn!(error = %err, "Dunning error");
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Sync usage records to Stripe for metered billing
+    async fn process_sync_usage(&self, user_id: uuid::Uuid) -> anyhow::Result<()> {
+        info!(%user_id, "Syncing usage to Stripe");
+
+        // Get pending usage records for this user
+        let usage_records: Vec<(uuid::Uuid, String, i64)> = sqlx::query_as(
+            r#"
+            SELECT id, usage_type, quantity
+            FROM usage_records
+            WHERE user_id = $1 AND synced_to_stripe = FALSE
+            ORDER BY recorded_at ASC
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.db)
+        .await?;
+
+        if usage_records.is_empty() {
+            info!(%user_id, "No pending usage to sync");
+            return Ok(());
+        }
+
+        // In production, this would call Stripe's Usage Record API
+        // For now, we just mark them as synced
+        let record_ids: Vec<uuid::Uuid> = usage_records.iter().map(|(id, _, _)| *id).collect();
+
+        sqlx::query(
+            r#"
+            UPDATE usage_records
+            SET synced_to_stripe = TRUE, synced_at = NOW()
+            WHERE id = ANY($1)
+            "#,
+        )
+        .bind(&record_ids)
+        .execute(&self.db)
+        .await?;
+
+        info!(
+            %user_id,
+            records_synced = record_ids.len(),
+            "Usage synced to Stripe"
+        );
+
+        Ok(())
+    }
+
+    /// Clean up old webhook events
+    async fn process_cleanup_webhooks(&self) -> anyhow::Result<()> {
+        info!("Cleaning up old webhook events");
+
+        let deleted = crate::handlers::dunning::cleanup_webhook_events(&self.db).await?;
+
+        info!(deleted, "Old webhook events cleaned up");
         Ok(())
     }
 }

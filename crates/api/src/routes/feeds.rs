@@ -26,6 +26,21 @@ pub struct CreateFeedRequest {
     pub title: Option<String>,
 }
 
+/// Category filter mode
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CategoryFilterMode {
+    Include,
+    Exclude,
+}
+
+/// Category filter configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CategoryFilter {
+    pub mode: CategoryFilterMode,
+    pub categories: Vec<String>,
+}
+
 /// Update feed request
 #[derive(Debug, Deserialize, Validate)]
 pub struct UpdateFeedRequest {
@@ -33,6 +48,7 @@ pub struct UpdateFeedRequest {
     pub title: Option<String>,
     pub folder_id: Option<Uuid>,
     pub priority: Option<String>,
+    pub category_filter: Option<CategoryFilter>,
 }
 
 /// List feeds query
@@ -61,6 +77,7 @@ pub struct FeedRow {
     pub error_count: i32,
     pub last_error: Option<String>,
     pub last_fetched_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub category_filter: Option<sqlx::types::Json<CategoryFilter>>,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -240,6 +257,37 @@ fn calculate_priority(items: &[FeedItem]) -> &'static str {
     }
 }
 
+/// Maximum articles to retain per feed
+const MAX_ARTICLES_PER_FEED: i64 = 200;
+
+/// Enforce article retention limit - delete oldest articles beyond limit
+async fn enforce_article_retention(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    feed_id: Uuid,
+    user_id: Uuid,
+) -> Result<i64, sqlx::Error> {
+    // Delete articles beyond the limit, keeping the newest ones
+    // Also keep starred articles regardless of limit
+    let result = sqlx::query(
+        r#"
+        DELETE FROM articles
+        WHERE id IN (
+            SELECT id FROM articles
+            WHERE feed_id = $1 AND user_id = $2 AND is_starred = FALSE
+            ORDER BY published_at DESC NULLS LAST
+            OFFSET $3
+        )
+        "#,
+    )
+    .bind(feed_id)
+    .bind(user_id)
+    .bind(MAX_ARTICLES_PER_FEED)
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(result.rows_affected() as i64)
+}
+
 // =============================================================================
 // Route handlers
 // =============================================================================
@@ -331,7 +379,7 @@ async fn create_feed(
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), $10, $10)
         RETURNING id, url, title, description, site_url, icon_url, feed_type, priority,
                   folder_id, article_count, unread_count, error_count, last_error,
-                  last_fetched_at, created_at
+                  last_fetched_at, category_filter, created_at
         "#,
     )
     .bind(user.id)
@@ -358,10 +406,13 @@ async fn create_feed(
             item.guid.clone()
         };
 
+        // Convert categories Vec<String> to JSONB
+        let categories_json = serde_json::to_value(&item.categories).unwrap_or_default();
+
         let result = sqlx::query(
             r#"
-            INSERT INTO articles (feed_id, user_id, guid, url, title, content, summary, author, published_at, fetched_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+            INSERT INTO articles (feed_id, user_id, guid, url, title, content, summary, author, published_at, fetched_at, categories)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), $10)
             ON CONFLICT (feed_id, guid) DO NOTHING
             "#,
         )
@@ -374,11 +425,23 @@ async fn create_feed(
         .bind(&item.summary)
         .bind(&item.author)
         .bind(item.published_at)
+        .bind(&categories_json)
         .execute(&mut *tx)
         .await;
 
         if let Err(e) = result {
             tracing::warn!("Failed to insert article {}: {}", item.title, e);
+        }
+    }
+
+    // Enforce retention limit (max 200 articles per feed)
+    if let Ok(deleted) = enforce_article_retention(&mut tx, feed.id, user.id).await {
+        if deleted > 0 {
+            tracing::info!(
+                "Deleted {} old articles from feed {} to enforce retention limit",
+                deleted,
+                feed.id
+            );
         }
     }
 
@@ -403,7 +466,7 @@ async fn list_feeds(
             r#"
             SELECT id, url, title, description, site_url, icon_url, feed_type, priority,
                    folder_id, article_count, unread_count, error_count, last_error,
-                   last_fetched_at, created_at
+                   last_fetched_at, category_filter, created_at
             FROM feeds
             WHERE user_id = $1 AND folder_id = $2
             ORDER BY position ASC, title ASC
@@ -420,7 +483,7 @@ async fn list_feeds(
             r#"
             SELECT id, url, title, description, site_url, icon_url, feed_type, priority,
                    folder_id, article_count, unread_count, error_count, last_error,
-                   last_fetched_at, created_at
+                   last_fetched_at, category_filter, created_at
             FROM feeds
             WHERE user_id = $1
             ORDER BY position ASC, title ASC
@@ -462,7 +525,7 @@ async fn get_feed(
         r#"
         SELECT id, url, title, description, site_url, icon_url, feed_type, priority,
                folder_id, article_count, unread_count, error_count, last_error,
-               last_fetched_at, created_at
+               last_fetched_at, category_filter, created_at
         FROM feeds
         WHERE id = $1 AND user_id = $2
         "#,
@@ -510,6 +573,13 @@ async fn update_feed(
         }
     }
 
+    // Convert category_filter to JSON if provided
+    let category_filter_json = req
+        .category_filter
+        .as_ref()
+        .map(|cf| serde_json::to_value(cf).ok())
+        .flatten();
+
     // Update feed
     let feed: FeedRow = sqlx::query_as(
         r#"
@@ -517,11 +587,12 @@ async fn update_feed(
             title = COALESCE($3, title),
             folder_id = COALESCE($4, folder_id),
             priority = COALESCE($5, priority),
+            category_filter = COALESCE($6, category_filter),
             updated_at = NOW()
         WHERE id = $1 AND user_id = $2
         RETURNING id, url, title, description, site_url, icon_url, feed_type, priority,
                   folder_id, article_count, unread_count, error_count, last_error,
-                  last_fetched_at, created_at
+                  last_fetched_at, category_filter, created_at
         "#,
     )
     .bind(feed_id)
@@ -529,6 +600,7 @@ async fn update_feed(
     .bind(&req.title)
     .bind(req.folder_id)
     .bind(&req.priority)
+    .bind(&category_filter_json)
     .fetch_one(state.db())
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to update feed: {}", e)))?;

@@ -1,7 +1,7 @@
 "use client";
 
 import { formatDistanceToNow } from "date-fns";
-import { Star, ExternalLink, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Star, ExternalLink, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useArticle, useUpdateArticle } from "@/lib/queries";
@@ -56,10 +56,12 @@ export function ArticleView() {
       <header className="flex items-center justify-between p-4 border-b border-border">
         <Button
           variant="ghost"
-          size="icon"
+          size="sm"
           onClick={() => setSelectedArticle(null)}
+          className="gap-1"
         >
-          <X className="w-5 h-5" />
+          <ArrowLeft className="w-4 h-4" />
+          <span className="md:hidden">Back</span>
         </Button>
 
         <div className="flex items-center gap-2">
@@ -78,11 +80,7 @@ export function ArticleView() {
           </Button>
           {article.url && (
             <Button variant="ghost" size="icon" asChild>
-              <a
-                href={article.url}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <a href={article.url} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="w-5 h-5" />
               </a>
             </Button>

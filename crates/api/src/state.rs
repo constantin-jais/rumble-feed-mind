@@ -5,8 +5,9 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 use redis::aio::ConnectionManager;
 use feedmind_core::crypto::KeyEncryption;
+use stripe::Client as StripeClient;
 
-use crate::config::AppConfig;
+use crate::config::{AppConfig, StripeConfig};
 
 /// Shared application state
 #[derive(Clone)]
@@ -27,6 +28,10 @@ struct AppStateInner {
     pub jwt_expiration: u64,
     /// Is production environment
     pub is_production: bool,
+    /// Stripe client (None if billing disabled)
+    pub stripe: Option<StripeClient>,
+    /// Stripe configuration
+    pub stripe_config: StripeConfig,
 }
 
 impl AppState {
@@ -53,6 +58,13 @@ impl AppState {
             config.master_key_version,
         )?;
 
+        // Setup Stripe client if configured
+        let stripe = if config.stripe.is_configured() {
+            Some(StripeClient::new(config.stripe.secret_key()))
+        } else {
+            None
+        };
+
         Ok(Self {
             inner: Arc::new(AppStateInner {
                 db,
@@ -61,6 +73,8 @@ impl AppState {
                 jwt_secret: config.jwt_secret.clone(),
                 jwt_expiration: config.jwt_expiration,
                 is_production: config.is_production(),
+                stripe,
+                stripe_config: config.stripe.clone(),
             }),
         })
     }
@@ -93,5 +107,20 @@ impl AppState {
     /// Check if production
     pub fn is_production(&self) -> bool {
         self.inner.is_production
+    }
+
+    /// Get Stripe client (returns None if billing is disabled)
+    pub fn stripe(&self) -> Option<&StripeClient> {
+        self.inner.stripe.as_ref()
+    }
+
+    /// Get Stripe config
+    pub fn stripe_config(&self) -> &StripeConfig {
+        &self.inner.stripe_config
+    }
+
+    /// Check if billing is enabled
+    pub fn billing_enabled(&self) -> bool {
+        self.inner.stripe.is_some()
     }
 }

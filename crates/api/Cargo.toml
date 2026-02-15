@@ -62,5 +62,8 @@ regex = { workspace = true }
 # HTTP client (for feed discovery)
 reqwest = { workspace = true }
 
+# Stripe payments
+stripe = { workspace = true }
+
 [dev-dependencies]
 axum-test = "16"
