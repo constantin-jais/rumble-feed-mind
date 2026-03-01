@@ -1,6 +1,9 @@
 //! Usage tracking endpoints
 
-use axum::{extract::{Query, State}, Json};
+use axum::{
+    extract::{Query, State},
+    Json,
+};
 use serde::{Deserialize, Serialize};
 
 use super::models::*;
@@ -32,7 +35,9 @@ pub async fn get_current_usage(
     State(state): State<AppState>,
     user: CurrentUser,
 ) -> ApiResult<Json<DataResponse<CurrentUsageResponse>>> {
-    let stripe = state.stripe().ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
+    let stripe = state
+        .stripe()
+        .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
     let service = BillingService::new(state.db(), stripe, state.stripe_config());
 
     let usage = service.get_current_usage(user.id).await?;
@@ -46,7 +51,9 @@ pub async fn get_usage_history(
     user: CurrentUser,
     Query(params): Query<UsageHistoryParams>,
 ) -> ApiResult<Json<DataResponse<Vec<UsageHistoryEntry>>>> {
-    let stripe = state.stripe().ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
+    let stripe = state
+        .stripe()
+        .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
     let service = BillingService::new(state.db(), stripe, state.stripe_config());
 
     // Limit to 90 days

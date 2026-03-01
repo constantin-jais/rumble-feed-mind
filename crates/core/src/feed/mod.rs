@@ -1,9 +1,8 @@
-//! Feed parsing and management
+//! Feed parsing and management compatibility exports.
+//!
+//! New code should prefer `feedmind-domain` for models and `feedmind-ingest`
+//! for parsing/fetching. This module keeps existing `feedmind-core` consumers
+//! stable during the crate split.
 
-mod fetcher;
-mod models;
-mod parser;
-
-pub use fetcher::FeedFetcher;
-pub use models::{Feed, FeedItem, FeedType};
-pub use parser::FeedParser;
+pub use feedmind_domain::feed::{Feed, FeedItem, FeedType};
+pub use feedmind_ingest::{FeedFetcher, FeedParser, FetcherConfig};

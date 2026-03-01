@@ -64,6 +64,3 @@ reqwest = { workspace = true }
 
 # Stripe payments
 stripe = { workspace = true }
-
-[dev-dependencies]
-axum-test = "16"

@@ -5,8 +5,7 @@ use std::str::FromStr;
 use axum::{extract::State, Json};
 use serde::Serialize;
 use stripe::{
-    CheckoutSession, CheckoutSessionMode,
-    CreateCheckoutSession, CreateCheckoutSessionLineItems,
+    CheckoutSession, CheckoutSessionMode, CreateCheckoutSession, CreateCheckoutSessionLineItems,
 };
 
 use super::models::*;
@@ -26,7 +25,9 @@ pub async fn get_subscription(
     State(state): State<AppState>,
     user: CurrentUser,
 ) -> ApiResult<Json<DataResponse<Option<SubscriptionResponse>>>> {
-    let stripe = state.stripe().ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
+    let stripe = state
+        .stripe()
+        .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
     let service = BillingService::new(state.db(), stripe, state.stripe_config());
 
     let sub = service.get_subscription(user.id).await?;
@@ -42,24 +43,30 @@ pub async fn create_subscription(
     user: CurrentUser,
     Json(req): Json<CreateSubscriptionRequest>,
 ) -> ApiResult<Json<DataResponse<SubscriptionResponse>>> {
-    let stripe = state.stripe().ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
+    let stripe = state
+        .stripe()
+        .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
     let service = BillingService::new(state.db(), stripe, state.stripe_config());
 
     // Check if user already has an active subscription
     if let Some(existing) = service.get_subscription(user.id).await? {
         if existing.status != SubscriptionStatus::Canceled {
-            return Err(ApiError::Conflict("User already has an active subscription".to_string()));
+            return Err(ApiError::Conflict(
+                "User already has an active subscription".to_string(),
+            ));
         }
     }
 
-    let sub = service.create_subscription(
-        user.id,
-        &user.email,
-        None, // Could get display name from user
-        req.plan,
-        req.interval,
-        req.payment_method_id,
-    ).await?;
+    let sub = service
+        .create_subscription(
+            user.id,
+            &user.email,
+            None, // Could get display name from user
+            req.plan,
+            req.interval,
+            req.payment_method_id,
+        )
+        .await?;
 
     Ok(Json(DataResponse { data: sub.into() }))
 }
@@ -70,10 +77,14 @@ pub async fn change_plan(
     user: CurrentUser,
     Json(req): Json<ChangePlanRequest>,
 ) -> ApiResult<Json<DataResponse<SubscriptionResponse>>> {
-    let stripe = state.stripe().ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
+    let stripe = state
+        .stripe()
+        .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
     let service = BillingService::new(state.db(), stripe, state.stripe_config());
 
-    let sub = service.change_plan(user.id, req.plan, req.interval, req.prorate).await?;
+    let sub = service
+        .change_plan(user.id, req.plan, req.interval, req.prorate)
+        .await?;
 
     Ok(Json(DataResponse { data: sub.into() }))
 }
@@ -84,10 +95,14 @@ pub async fn cancel_subscription(
     user: CurrentUser,
     Json(req): Json<CancelSubscriptionRequest>,
 ) -> ApiResult<Json<DataResponse<SubscriptionResponse>>> {
-    let stripe = state.stripe().ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
+    let stripe = state
+        .stripe()
+        .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
     let service = BillingService::new(state.db(), stripe, state.stripe_config());
 
-    let sub = service.cancel_subscription(user.id, req.reason, req.immediate).await?;
+    let sub = service
+        .cancel_subscription(user.id, req.reason, req.immediate)
+        .await?;
 
     Ok(Json(DataResponse { data: sub.into() }))
 }
@@ -97,7 +112,9 @@ pub async fn reactivate_subscription(
     State(state): State<AppState>,
     user: CurrentUser,
 ) -> ApiResult<Json<DataResponse<SubscriptionResponse>>> {
-    let stripe = state.stripe().ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
+    let stripe = state
+        .stripe()
+        .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
     let service = BillingService::new(state.db(), stripe, state.stripe_config());
 
     let sub = service.reactivate_subscription(user.id).await?;
@@ -111,11 +128,15 @@ pub async fn create_portal_session(
     user: CurrentUser,
     Json(req): Json<CreateSessionRequest>,
 ) -> ApiResult<Json<DataResponse<SessionResponse>>> {
-    let stripe_client = state.stripe().ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
+    let stripe_client = state
+        .stripe()
+        .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
     let service = BillingService::new(state.db(), stripe_client, state.stripe_config());
 
     // Get or create Stripe customer
-    let customer = service.get_or_create_stripe_customer(user.id, &user.email, None).await?;
+    let customer = service
+        .get_or_create_stripe_customer(user.id, &user.email, None)
+        .await?;
 
     // Create portal session
     let customer_id = stripe::CustomerId::from_str(&customer.stripe_customer_id)
@@ -138,13 +159,19 @@ pub async fn create_checkout_session(
     user: CurrentUser,
     Json(req): Json<CreateSessionRequest>,
 ) -> ApiResult<Json<DataResponse<SessionResponse>>> {
-    let stripe_client = state.stripe().ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
+    let stripe_client = state
+        .stripe()
+        .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
     let service = BillingService::new(state.db(), stripe_client, state.stripe_config());
     let config = state.stripe_config();
 
     // Get plan and interval
-    let plan = req.plan.ok_or_else(|| ApiError::BadRequest("Plan is required".to_string()))?;
-    let interval = req.interval.ok_or_else(|| ApiError::BadRequest("Interval is required".to_string()))?;
+    let plan = req
+        .plan
+        .ok_or_else(|| ApiError::BadRequest("Plan is required".to_string()))?;
+    let interval = req
+        .interval
+        .ok_or_else(|| ApiError::BadRequest("Interval is required".to_string()))?;
 
     // Get price ID
     let price_id = match (plan, interval) {
@@ -152,11 +179,18 @@ pub async fn create_checkout_session(
         (PlanTier::Pro, BillingInterval::Year) => config.stripe_price_pro_annual.clone(),
         (PlanTier::Team, BillingInterval::Month) => config.stripe_price_team_monthly.clone(),
         (PlanTier::Team, BillingInterval::Year) => config.stripe_price_team_annual.clone(),
-        (PlanTier::Free, _) => return Err(ApiError::BadRequest("Cannot subscribe to free plan".to_string())),
-    }.ok_or_else(|| ApiError::Internal("Price not configured".to_string()))?;
+        (PlanTier::Free, _) => {
+            return Err(ApiError::BadRequest(
+                "Cannot subscribe to free plan".to_string(),
+            ))
+        }
+    }
+    .ok_or_else(|| ApiError::Internal("Price not configured".to_string()))?;
 
     // Get or create Stripe customer
-    let customer = service.get_or_create_stripe_customer(user.id, &user.email, None).await?;
+    let customer = service
+        .get_or_create_stripe_customer(user.id, &user.email, None)
+        .await?;
 
     // Create checkout session
     let customer_id = stripe::CustomerId::from_str(&customer.stripe_customer_id)
@@ -193,7 +227,9 @@ pub async fn create_checkout_session(
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to create checkout session: {}", e)))?;
 
-    let url = session.url.ok_or_else(|| ApiError::Internal("No checkout URL returned".to_string()))?;
+    let url = session
+        .url
+        .ok_or_else(|| ApiError::Internal("No checkout URL returned".to_string()))?;
 
     Ok(Json(DataResponse {
         data: SessionResponse { url },

@@ -1,22 +1,20 @@
-//! Feed fetching with HTTP client
+//! Feed fetching with HTTP client.
 
-use super::models::{Feed, FeedItem};
-use super::parser::FeedParser;
-use crate::error::{Error, Result};
-use reqwest::Client;
 use std::time::Duration;
+
+use feedmind_domain::feed::{Feed, FeedItem};
+use reqwest::Client;
 use tracing::{info, warn};
 
-/// Feed fetcher configuration
+use crate::error::{Error, Result};
+use crate::parser::FeedParser;
+
+/// Feed fetcher configuration.
 #[derive(Debug, Clone)]
 pub struct FetcherConfig {
-    /// Request timeout (default: 30s per AMD-003)
     pub timeout: Duration,
-    /// Max redirects (default: 5 per AMD-003)
     pub max_redirects: usize,
-    /// Max response size (default: 10MB per AMD-003)
     pub max_size: usize,
-    /// User agent
     pub user_agent: String,
 }
 
@@ -25,7 +23,7 @@ impl Default for FetcherConfig {
         Self {
             timeout: Duration::from_secs(30),
             max_redirects: 5,
-            max_size: 10 * 1024 * 1024, // 10MB
+            max_size: 10 * 1024 * 1024,
             user_agent: format!(
                 "FeedMind/{} (+https://feedmind.ai)",
                 env!("CARGO_PKG_VERSION")
@@ -34,19 +32,19 @@ impl Default for FetcherConfig {
     }
 }
 
-/// HTTP feed fetcher
+/// HTTP feed fetcher.
 pub struct FeedFetcher {
     client: Client,
     config: FetcherConfig,
 }
 
 impl FeedFetcher {
-    /// Create a new fetcher with default config
+    /// Create a new fetcher with default config.
     pub fn new() -> Result<Self> {
         Self::with_config(FetcherConfig::default())
     }
 
-    /// Create a new fetcher with custom config
+    /// Create a new fetcher with custom config.
     pub fn with_config(config: FetcherConfig) -> Result<Self> {
         let client = Client::builder()
             .timeout(config.timeout)
@@ -59,7 +57,7 @@ impl FeedFetcher {
         Ok(Self { client, config })
     }
 
-    /// Fetch and parse a feed from URL
+    /// Fetch and parse a feed from URL.
     pub async fn fetch(&self, url: &str) -> Result<(Feed, Vec<FeedItem>)> {
         info!(url = %url, "Fetching feed");
 
@@ -75,7 +73,6 @@ impl FeedFetcher {
             return Err(Error::HttpStatus(status.as_u16()));
         }
 
-        // Check content length
         if let Some(len) = response.content_length() {
             if len as usize > self.config.max_size {
                 return Err(Error::FeedParse(format!(
@@ -98,7 +95,7 @@ impl FeedFetcher {
         FeedParser::parse(&bytes, url)
     }
 
-    /// Fetch only headers to check if feed has been modified
+    /// Fetch only headers to check if feed has been modified.
     pub async fn check_modified(
         &self,
         url: &str,
@@ -115,8 +112,6 @@ impl FeedFetcher {
         }
 
         let response = request.send().await?;
-
-        // 304 Not Modified = feed hasn't changed
         Ok(response.status() != reqwest::StatusCode::NOT_MODIFIED)
     }
 }

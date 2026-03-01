@@ -1,10 +1,10 @@
 //! Application state
 
-use std::sync::Arc;
+use feedmind_core::crypto::KeyEncryption;
+use redis::aio::ConnectionManager;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
-use redis::aio::ConnectionManager;
-use feedmind_core::crypto::KeyEncryption;
+use std::sync::Arc;
 use stripe::Client as StripeClient;
 
 use crate::config::{AppConfig, StripeConfig};
@@ -44,19 +44,14 @@ impl AppState {
             .await?;
 
         // Run migrations
-        sqlx::migrate!("../../migrations")
-            .run(&db)
-            .await?;
+        sqlx::migrate!("../../migrations").run(&db).await?;
 
         // Connect to Redis
         let redis_client = redis::Client::open(config.redis_url.as_str())?;
         let redis = ConnectionManager::new(redis_client).await?;
 
         // Setup encryption
-        let encryption = KeyEncryption::from_base64(
-            &config.master_key,
-            config.master_key_version,
-        )?;
+        let encryption = KeyEncryption::from_base64(&config.master_key, config.master_key_version)?;
 
         // Setup Stripe client if configured
         let stripe = if config.stripe.is_configured() {

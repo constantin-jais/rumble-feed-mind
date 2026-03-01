@@ -1,9 +1,7 @@
-//! Rules engine for filtering articles
+//! Rules engine compatibility exports.
+//!
+//! New code should prefer `feedmind-domain` for rule models and
+//! `feedmind-rules` for evaluation.
 
-mod evaluator;
-mod models;
-mod regex_rule;
-
-pub use evaluator::RuleEvaluator;
-pub use models::{Rule, RuleAction, RuleMatch, RuleType};
-pub use regex_rule::RegexRule;
+pub use feedmind_domain::rules::{Rule, RuleAction, RuleMatch, RuleType};
+pub use feedmind_rules::{EvaluationResult, RegexRule, RuleEvaluator};

@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/domain",
+    "crates/ingest",
+    "crates/rules",
     "crates/core",
     "crates/api",
     "crates/worker",
@@ -10,7 +13,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-license = "AGPL-3.0"
+license = "MIT"
 authors = ["Constantin Jais"]
 repository = "https://github.com/feedmind/feedmind"
 
@@ -86,6 +89,9 @@ tokio-cron-scheduler = "0.13"
 stripe = { package = "async-stripe", version = "0.39", features = ["runtime-tokio-hyper"] }
 
 # Internal crates
+feedmind-domain = { path = "crates/domain" }
+feedmind-ingest = { path = "crates/ingest" }
+feedmind-rules = { path = "crates/rules" }
 feedmind-core = { path = "crates/core" }
 
 [profile.release]

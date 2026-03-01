@@ -1,10 +1,10 @@
-//! Feed domain models
+//! Feed domain models.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Feed type (detected from content)
+/// Feed type detected from source content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FeedType {
@@ -23,64 +23,41 @@ impl std::fmt::Display for FeedType {
     }
 }
 
-/// Represents an RSS/Atom feed
+/// RSS/Atom/JSON Feed metadata after normalization.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Feed {
-    /// Unique identifier
     pub id: Uuid,
-    /// Feed URL
     pub url: String,
-    /// Feed title
     pub title: String,
-    /// Feed description
     pub description: Option<String>,
-    /// Feed website URL
     pub site_url: Option<String>,
-    /// Feed type
     pub feed_type: FeedType,
-    /// Feed icon URL
     pub icon_url: Option<String>,
-    /// Last successful fetch
     pub last_fetched_at: Option<DateTime<Utc>>,
-    /// Last error message
     pub last_error: Option<String>,
-    /// Number of consecutive errors
     pub error_count: u32,
-    /// Created at
     pub created_at: DateTime<Utc>,
-    /// Updated at
     pub updated_at: DateTime<Utc>,
 }
 
-/// Represents an item/entry in a feed
+/// Normalized item/entry extracted from a feed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FeedItem {
-    /// Unique identifier (GUID from feed or generated)
     pub guid: String,
-    /// Item title
     pub title: String,
-    /// Item URL
     pub url: Option<String>,
-    /// Item content (HTML)
     pub content: Option<String>,
-    /// Item summary/description
     pub summary: Option<String>,
-    /// Author name
     pub author: Option<String>,
-    /// Published date
     pub published_at: Option<DateTime<Utc>>,
-    /// Updated date
     pub updated_at: Option<DateTime<Utc>>,
-    /// Categories/tags from feed
     pub categories: Vec<String>,
-    /// Enclosure URL (for podcasts, media)
     pub enclosure_url: Option<String>,
-    /// Enclosure MIME type
     pub enclosure_type: Option<String>,
 }
 
 impl Feed {
-    /// Create a new feed with default values
+    /// Create a new feed with default timestamps and counters.
     pub fn new(url: String, title: String, feed_type: FeedType) -> Self {
         let now = Utc::now();
         Self {
@@ -101,7 +78,7 @@ impl Feed {
 }
 
 impl FeedItem {
-    /// Generate a GUID from title and URL if not provided
+    /// Generate a stable GUID from title and optional URL when a feed omits it.
     pub fn generate_guid(title: &str, url: Option<&str>) -> String {
         use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();

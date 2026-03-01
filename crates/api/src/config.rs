@@ -83,12 +83,16 @@ impl StripeConfig {
 
     /// Get the Stripe secret key (panics if not configured)
     pub fn secret_key(&self) -> &str {
-        self.stripe_secret_key.as_deref().expect("Stripe secret key not configured")
+        self.stripe_secret_key
+            .as_deref()
+            .expect("Stripe secret key not configured")
     }
 
     /// Get the webhook secret (panics if not configured)
     pub fn webhook_secret(&self) -> &str {
-        self.stripe_webhook_secret.as_deref().expect("Stripe webhook secret not configured")
+        self.stripe_webhook_secret
+            .as_deref()
+            .expect("Stripe webhook secret not configured")
     }
 }
 

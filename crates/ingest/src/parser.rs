@@ -1,16 +1,17 @@
-//! Feed parsing using feed-rs
+//! Feed parsing using feed-rs.
 
-use super::models::{Feed, FeedItem, FeedType};
-use crate::error::{Error, Result};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use feed_rs::parser;
+use feedmind_domain::feed::{Feed, FeedItem, FeedType};
 use uuid::Uuid;
 
-/// Feed parser that handles RSS, Atom, and JSON Feed formats
+use crate::error::{Error, Result};
+
+/// Feed parser that handles RSS, Atom, and JSON Feed formats.
 pub struct FeedParser;
 
 impl FeedParser {
-    /// Parse feed content from bytes
+    /// Parse feed content from bytes.
     pub fn parse(content: &[u8], url: &str) -> Result<(Feed, Vec<FeedItem>)> {
         let parsed = parser::parse(content).map_err(|e| Error::FeedParse(e.to_string()))?;
 
@@ -26,9 +27,7 @@ impl FeedParser {
             .unwrap_or_else(|| "Untitled Feed".to_string());
 
         let description = parsed.description.map(|d| d.content);
-
         let site_url = parsed.links.first().map(|l| l.href.clone());
-
         let icon_url = parsed
             .icon
             .map(|i| i.uri)
@@ -50,24 +49,22 @@ impl FeedParser {
             updated_at: now,
         };
 
-        let items: Vec<FeedItem> = parsed
+        let items = parsed
             .entries
             .into_iter()
-            .take(500) // AMD-003: Max 500 items per fetch
-            .map(|entry| Self::parse_entry(entry))
+            .take(500)
+            .map(Self::parse_entry)
             .collect();
 
         Ok((feed, items))
     }
 
-    /// Parse a single feed entry into a FeedItem
     fn parse_entry(entry: feed_rs::model::Entry) -> FeedItem {
         let title = entry
             .title
             .map(|t| t.content)
             .unwrap_or_else(|| "Untitled".to_string());
 
-        // Truncate title to 500 chars (AMD-003)
         let title = if title.len() > 500 {
             format!("{}...", &title[..497])
         } else {
@@ -81,7 +78,6 @@ impl FeedParser {
             .and_then(|c| c.body)
             .or_else(|| entry.summary.clone().map(|s| s.content));
 
-        // Truncate content to 100KB (AMD-003)
         let content = content.map(|c| {
             if c.len() > 100_000 {
                 format!("{}...", &c[..99_997])
@@ -91,14 +87,10 @@ impl FeedParser {
         });
 
         let summary = entry.summary.map(|s| s.content);
-
         let author = entry.authors.first().map(|a| a.name.clone());
-
-        let published_at = entry.published.map(DateTime::<Utc>::from);
-
-        let updated_at = entry.updated.map(DateTime::<Utc>::from);
-
-        let categories: Vec<String> = entry.categories.into_iter().map(|c| c.term).collect();
+        let published_at = entry.published;
+        let updated_at = entry.updated;
+        let categories = entry.categories.into_iter().map(|c| c.term).collect();
 
         let (enclosure_url, enclosure_type) = entry
             .media
@@ -112,11 +104,10 @@ impl FeedParser {
             })
             .unwrap_or((None, None));
 
-        let guid = entry.id.clone();
-        let guid = if guid.is_empty() {
+        let guid = if entry.id.is_empty() {
             FeedItem::generate_guid(&title, url.as_deref())
         } else {
-            guid
+            entry.id
         };
 
         FeedItem {

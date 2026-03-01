@@ -1,5 +1,8 @@
 //! FeedMind Background Worker
 
+// TODO(refactor): remove once scheduled jobs and billing recovery paths are fully wired.
+#![allow(dead_code)]
+
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 

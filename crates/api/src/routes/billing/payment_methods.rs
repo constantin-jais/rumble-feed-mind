@@ -42,7 +42,9 @@ pub async fn list_payment_methods(
     State(state): State<AppState>,
     user: CurrentUser,
 ) -> ApiResult<Json<ListResponse<PaymentMethodResponse>>> {
-    let stripe = state.stripe().ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
+    let stripe = state
+        .stripe()
+        .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
     let service = BillingService::new(state.db(), stripe, state.stripe_config());
 
     let methods = service.list_payment_methods(user.id).await?;
@@ -60,12 +62,18 @@ pub async fn add_payment_method(
     user: CurrentUser,
     Json(req): Json<AddPaymentMethodRequest>,
 ) -> ApiResult<Json<DataResponse<PaymentMethodResponse>>> {
-    let stripe = state.stripe().ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
+    let stripe = state
+        .stripe()
+        .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
     let service = BillingService::new(state.db(), stripe, state.stripe_config());
 
-    let method = service.add_payment_method(user.id, &req.payment_method_id, req.set_default).await?;
+    let method = service
+        .add_payment_method(user.id, &req.payment_method_id, req.set_default)
+        .await?;
 
-    Ok(Json(DataResponse { data: method.into() }))
+    Ok(Json(DataResponse {
+        data: method.into(),
+    }))
 }
 
 /// Delete payment method
@@ -74,7 +82,9 @@ pub async fn delete_payment_method(
     user: CurrentUser,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<DataResponse<SuccessResponse>>> {
-    let stripe = state.stripe().ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
+    let stripe = state
+        .stripe()
+        .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
     let service = BillingService::new(state.db(), stripe, state.stripe_config());
 
     service.delete_payment_method(user.id, id).await?;
@@ -90,10 +100,14 @@ pub async fn set_default_payment_method(
     user: CurrentUser,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<DataResponse<PaymentMethodResponse>>> {
-    let stripe = state.stripe().ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
+    let stripe = state
+        .stripe()
+        .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
     let service = BillingService::new(state.db(), stripe, state.stripe_config());
 
     let method = service.set_default_payment_method(user.id, id).await?;
 
-    Ok(Json(DataResponse { data: method.into() }))
+    Ok(Json(DataResponse {
+        data: method.into(),
+    }))
 }

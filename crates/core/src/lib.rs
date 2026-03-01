@@ -7,11 +7,12 @@
 //! - Article management
 //! - AI provider abstraction
 
+pub mod article;
+pub mod crypto;
+pub mod domain;
 pub mod error;
 pub mod feed;
-pub mod article;
-pub mod rules;
 pub mod opml;
-pub mod crypto;
+pub mod rules;
 
 pub use error::{Error, Result};

@@ -5,6 +5,11 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+# Internal
+feedmind-domain = { workspace = true }
+feedmind-ingest = { workspace = true }
+feedmind-rules = { workspace = true }
+
 # Async
 tokio = { workspace = true }
 

@@ -73,7 +73,6 @@ pub enum JobType {
     // ========================================================================
     // BILLING JOBS
     // ========================================================================
-
     /// Check dunning status for all accounts in grace period (scheduled job)
     /// Runs daily to downgrade or suspend accounts
     CheckDunningStatus,
@@ -101,18 +100,32 @@ pub enum EmailTemplate {
     // ========================================================================
     // DUNNING EMAIL TEMPLATES
     // ========================================================================
-
     /// Payment failed - first notification (day 1)
-    PaymentFailedDay1 { user_id: Uuid, amount: i64, currency: String },
+    PaymentFailedDay1 {
+        user_id: Uuid,
+        amount: i64,
+        currency: String,
+    },
 
     /// Payment failed - reminder (day 3)
-    PaymentFailedDay3 { user_id: Uuid, amount: i64, currency: String },
+    PaymentFailedDay3 {
+        user_id: Uuid,
+        amount: i64,
+        currency: String,
+    },
 
     /// Payment failed - final warning before downgrade (day 7)
-    PaymentFailedDay7 { user_id: Uuid, amount: i64, currency: String },
+    PaymentFailedDay7 {
+        user_id: Uuid,
+        amount: i64,
+        currency: String,
+    },
 
     /// Account downgraded to free due to non-payment
-    AccountDowngraded { user_id: Uuid, previous_plan: String },
+    AccountDowngraded {
+        user_id: Uuid,
+        previous_plan: String,
+    },
 
     /// Account suspended due to extended non-payment (day 30)
     AccountSuspended { user_id: Uuid },
@@ -122,20 +135,15 @@ pub enum EmailTemplate {
 }
 
 /// Job priority levels
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum JobPriority {
     /// Low priority (cleanup, exports)
     Low = 0,
     /// Normal priority (feed fetching)
+    #[default]
     Normal = 1,
     /// High priority (rule evaluation, user-triggered actions)
     High = 2,
-}
-
-impl Default for JobPriority {
-    fn default() -> Self {
-        Self::Normal
-    }
 }
 
 impl JobType {
