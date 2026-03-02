@@ -14,5 +14,7 @@ pub mod error;
 pub mod feed;
 pub mod opml;
 pub mod rules;
+pub mod storage;
+pub mod sync;
 
 pub use error::{Error, Result};

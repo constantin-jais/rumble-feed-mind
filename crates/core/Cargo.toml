@@ -9,6 +9,8 @@ license.workspace = true
 feedmind-domain = { workspace = true }
 feedmind-ingest = { workspace = true }
 feedmind-rules = { workspace = true }
+feedmind-storage = { workspace = true }
+feedmind-sync = { workspace = true }
 
 # Async
 tokio = { workspace = true }

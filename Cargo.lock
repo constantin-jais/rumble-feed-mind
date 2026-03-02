@@ -974,6 +974,8 @@ dependencies = [
  "feedmind-domain",
  "feedmind-ingest",
  "feedmind-rules",
+ "feedmind-storage",
+ "feedmind-sync",
  "hkdf",
  "quick-xml",
  "rand 0.8.6",
@@ -1023,6 +1025,26 @@ dependencies = [
  "regex",
  "thiserror 2.0.18",
  "tracing",
+ "uuid 1.23.4",
+]
+
+[[package]]
+name = "feedmind-storage"
+version = "0.1.0"
+dependencies = [
+ "feedmind-domain",
+ "feedmind-sync",
+ "thiserror 2.0.18",
+ "uuid 1.23.4",
+]
+
+[[package]]
+name = "feedmind-sync"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "feedmind-domain",
+ "serde",
  "uuid 1.23.4",
 ]
 

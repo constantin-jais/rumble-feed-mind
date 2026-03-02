@@ -1,6 +1,6 @@
 version = "1"
 project = "rumble-feed-mind"
-current_phase = "phase_3"
+current_phase = "phase_4"
 
 [phases.phase_0]
 name = "Doctrine et reproductibilité"
@@ -76,7 +76,7 @@ status = "done"
 
 [phases.phase_3]
 name = "Core crates extraction"
-status = "in-progress"
+status = "done"
 
 [[phases.phase_3.sub_milestones]]
 id = "domain"
@@ -96,16 +96,16 @@ status = "done"
 [[phases.phase_3.sub_milestones]]
 id = "sync"
 name = "Sync/events crate extraite"
-status = "pending"
+status = "done"
 
 [[phases.phase_3.sub_milestones]]
 id = "storage"
 name = "Storage ports crate extraite"
-status = "pending"
+status = "done"
 
 [phases.phase_4]
 name = "Rust UI et distribution"
-status = "pending"
+status = "in-progress"
 
 [[phases.phase_4.sub_milestones]]
 id = "web-rs"
@@ -152,8 +152,8 @@ lower_is_better = true
 [[observability]]
 id = "core_tests"
 name = "Tests Rust workspace"
-value = 34
-target = 34
+value = 37
+target = 37
 lower_is_better = false
 
 [[observability]]
