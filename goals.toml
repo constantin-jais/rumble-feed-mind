@@ -108,6 +108,11 @@ name = "Rust UI et distribution"
 status = "in-progress"
 
 [[phases.phase_4.sub_milestones]]
+id = "cli-reference"
+name = "CLI smoke sans base de données"
+status = "done"
+
+[[phases.phase_4.sub_milestones]]
 id = "web-rs"
 name = "apps/web-rs Leptos"
 status = "pending"

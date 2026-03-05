@@ -11,6 +11,7 @@ Le lancement produit cible n'est pas une simple démo web. C'est une distributio
 - `feedmind-domain` extrait.
 - Décisions et événements métier disponibles.
 - CLI capable d'exécuter un parcours local minimal.
+- Smoke sans base : `feedmind-cli opml-summary --file <file.opml>`.
 - Gates Rust strictes vertes.
 
 ### RC1 — Server self-hostable

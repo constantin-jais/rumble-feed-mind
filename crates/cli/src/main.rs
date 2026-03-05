@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -63,6 +64,13 @@ enum Commands {
 
     /// Show database statistics
     Stats,
+
+    /// Parse an OPML file and print a JSON summary without requiring a database
+    OpmlSummary {
+        /// Path to the OPML file
+        #[arg(short, long)]
+        file: PathBuf,
+    },
 }
 
 #[tokio::main]
@@ -77,40 +85,61 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    // Get database URL
-    let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
-
-    // Create connection pool
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(&database_url)
-        .await
-        .context("Failed to connect to database")?;
-
     match cli.command {
-        Commands::Import {
-            file,
-            email,
-            password,
-        } => {
-            import_opml(&pool, &file, &email, &password).await?;
+        Commands::OpmlSummary { file } => {
+            opml_summary(&file)?;
         }
-        Commands::Export { email, output } => {
-            export_opml(&pool, &email, &output).await?;
-        }
-        Commands::CreateUser {
-            email,
-            password,
-            tier,
-        } => {
-            create_user(&pool, &email, &password, &tier).await?;
-        }
-        Commands::Stats => {
-            show_stats(&pool).await?;
+        command => {
+            let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
+            let pool = PgPoolOptions::new()
+                .max_connections(5)
+                .connect(&database_url)
+                .await
+                .context("Failed to connect to database")?;
+
+            match command {
+                Commands::Import {
+                    file,
+                    email,
+                    password,
+                } => {
+                    import_opml(&pool, &file, &email, &password).await?;
+                }
+                Commands::Export { email, output } => {
+                    export_opml(&pool, &email, &output).await?;
+                }
+                Commands::CreateUser {
+                    email,
+                    password,
+                    tier,
+                } => {
+                    create_user(&pool, &email, &password, &tier).await?;
+                }
+                Commands::Stats => {
+                    show_stats(&pool).await?;
+                }
+                Commands::OpmlSummary { .. } => unreachable!("handled before DB setup"),
+            }
         }
     }
 
     Ok(())
+}
+
+#[derive(Serialize)]
+struct OpmlSummary {
+    title: Option<String>,
+    feed_count: usize,
+    folder_count: usize,
+    feeds: Vec<OpmlSummaryFeed>,
+}
+
+#[derive(Serialize)]
+struct OpmlSummaryFeed {
+    title: String,
+    xml_url: String,
+    html_url: Option<String>,
+    folder: Option<String>,
 }
 
 /// Flattened feed info for import
@@ -122,6 +151,30 @@ struct FlatFeed {
 }
 
 /// Flatten OPML outlines to a list of feeds with folder info
+fn opml_summary(file: &PathBuf) -> Result<()> {
+    let content = std::fs::read_to_string(file).context("Failed to read OPML file")?;
+    let doc = OpmlParser::parse(&content).context("Failed to parse OPML file")?;
+    let feeds = flatten_outlines(&doc.outlines, None);
+
+    let summary = OpmlSummary {
+        title: doc.title.clone(),
+        feed_count: feeds.len(),
+        folder_count: doc.folder_count(),
+        feeds: feeds
+            .into_iter()
+            .map(|feed| OpmlSummaryFeed {
+                title: feed.title,
+                xml_url: feed.xml_url,
+                html_url: feed.html_url,
+                folder: feed.folder,
+            })
+            .collect(),
+    };
+
+    println!("{}", serde_json::to_string_pretty(&summary)?);
+    Ok(())
+}
+
 fn flatten_outlines(outlines: &[OpmlOutline], parent_folder: Option<&str>) -> Vec<FlatFeed> {
     let mut feeds = Vec::new();
 
