@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgPoolOptions;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -9,6 +9,10 @@ use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
 use feedmind_core::opml::{OpmlDocument, OpmlExporter, OpmlOutline, OpmlParser};
+use feedmind_domain::article::Article;
+use feedmind_domain::rules::{Rule, RuleAction};
+use feedmind_ingest::FeedFetcher;
+use feedmind_rules::RuleEvaluator;
 
 #[derive(Parser)]
 #[command(name = "feedmind-cli")]
@@ -71,6 +75,24 @@ enum Commands {
         #[arg(short, long)]
         file: PathBuf,
     },
+
+    /// Fetch a feed and print a JSON summary without storing it
+    FetchFeed {
+        /// Feed URL to fetch
+        #[arg(short, long)]
+        url: String,
+    },
+
+    /// Evaluate one article JSON against one rule JSON without requiring a database
+    EvaluateRule {
+        /// Path to an Article JSON file
+        #[arg(short, long)]
+        article: PathBuf,
+
+        /// Path to a Rule JSON file
+        #[arg(short, long)]
+        rule: PathBuf,
+    },
 }
 
 #[tokio::main]
@@ -88,6 +110,12 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::OpmlSummary { file } => {
             opml_summary(&file)?;
+        }
+        Commands::FetchFeed { url } => {
+            fetch_feed(&url).await?;
+        }
+        Commands::EvaluateRule { article, rule } => {
+            evaluate_rule(&article, &rule)?;
         }
         command => {
             let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
@@ -118,7 +146,9 @@ async fn main() -> Result<()> {
                 Commands::Stats => {
                     show_stats(&pool).await?;
                 }
-                Commands::OpmlSummary { .. } => unreachable!("handled before DB setup"),
+                Commands::OpmlSummary { .. }
+                | Commands::FetchFeed { .. }
+                | Commands::EvaluateRule { .. } => unreachable!("handled before DB setup"),
             }
         }
     }
@@ -140,6 +170,65 @@ struct OpmlSummaryFeed {
     xml_url: String,
     html_url: Option<String>,
     folder: Option<String>,
+}
+
+#[derive(Serialize)]
+struct FetchFeedSummary {
+    feed: FetchFeedMeta,
+    item_count: usize,
+    items: Vec<FetchFeedItem>,
+}
+
+#[derive(Serialize)]
+struct FetchFeedMeta {
+    url: String,
+    title: String,
+    feed_type: String,
+    site_url: Option<String>,
+}
+
+#[derive(Serialize)]
+struct FetchFeedItem {
+    guid: String,
+    title: String,
+    url: Option<String>,
+    published_at: Option<String>,
+}
+
+#[derive(Serialize)]
+struct EvaluateRuleSummary {
+    matched: bool,
+    action: Option<RuleAction>,
+    deciding_rule: Option<String>,
+    decisions: Vec<EvaluateRuleDecision>,
+}
+
+#[derive(Serialize)]
+struct EvaluateRuleDecision {
+    rule_id: Uuid,
+    outcome: String,
+    actions: Vec<RuleAction>,
+    confidence: f32,
+    explanation: String,
+    evidence: Vec<EvaluateRuleEvidence>,
+}
+
+#[derive(Serialize)]
+struct EvaluateRuleEvidence {
+    field: String,
+    excerpt: String,
+    pattern: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct RuleInput {
+    user_id: Option<Uuid>,
+    name: String,
+    pattern: String,
+    action: RuleAction,
+    feed_id: Option<Uuid>,
+    priority: Option<i32>,
+    stop_on_match: Option<bool>,
 }
 
 /// Flattened feed info for import
@@ -167,6 +256,89 @@ fn opml_summary(file: &PathBuf) -> Result<()> {
                 xml_url: feed.xml_url,
                 html_url: feed.html_url,
                 folder: feed.folder,
+            })
+            .collect(),
+    };
+
+    println!("{}", serde_json::to_string_pretty(&summary)?);
+    Ok(())
+}
+
+async fn fetch_feed(url: &str) -> Result<()> {
+    let fetcher = FeedFetcher::new().context("Failed to create feed fetcher")?;
+    let (feed, items) = fetcher
+        .fetch(url)
+        .await
+        .with_context(|| format!("Failed to fetch feed: {url}"))?;
+
+    let summary = FetchFeedSummary {
+        feed: FetchFeedMeta {
+            url: feed.url,
+            title: feed.title,
+            feed_type: feed.feed_type.to_string(),
+            site_url: feed.site_url,
+        },
+        item_count: items.len(),
+        items: items
+            .into_iter()
+            .take(20)
+            .map(|item| FetchFeedItem {
+                guid: item.guid,
+                title: item.title,
+                url: item.url,
+                published_at: item.published_at.map(|date| date.to_rfc3339()),
+            })
+            .collect(),
+    };
+
+    println!("{}", serde_json::to_string_pretty(&summary)?);
+    Ok(())
+}
+
+fn evaluate_rule(article_file: &PathBuf, rule_file: &PathBuf) -> Result<()> {
+    let article_content =
+        std::fs::read_to_string(article_file).context("Failed to read article JSON")?;
+    let rule_content = std::fs::read_to_string(rule_file).context("Failed to read rule JSON")?;
+
+    let article: Article =
+        serde_json::from_str(&article_content).context("Invalid Article JSON")?;
+    let input: RuleInput = serde_json::from_str(&rule_content).context("Invalid rule JSON")?;
+
+    let mut rule = Rule::new_regex(
+        input.user_id.unwrap_or_else(Uuid::new_v4),
+        input.name,
+        input.pattern,
+        input.action,
+    );
+    rule.feed_id = input.feed_id;
+    rule.priority = input.priority.unwrap_or_default();
+    rule.stop_on_match = input.stop_on_match.unwrap_or(false);
+
+    let evaluator = RuleEvaluator::new(vec![rule]).context("Failed to compile rule")?;
+    let result = evaluator.evaluate(&article, article.feed_id);
+
+    let summary = EvaluateRuleSummary {
+        matched: result.action.is_some(),
+        action: result.action,
+        deciding_rule: result.deciding_rule,
+        decisions: result
+            .decisions
+            .into_iter()
+            .map(|decision| EvaluateRuleDecision {
+                rule_id: decision.rule_id,
+                outcome: format!("{:?}", decision.outcome),
+                actions: decision.actions,
+                confidence: decision.confidence,
+                explanation: decision.explanation,
+                evidence: decision
+                    .evidence
+                    .into_iter()
+                    .map(|evidence| EvaluateRuleEvidence {
+                        field: evidence.field,
+                        excerpt: evidence.excerpt,
+                        pattern: evidence.pattern,
+                    })
+                    .collect(),
             })
             .collect(),
     };

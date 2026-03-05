@@ -10,6 +10,9 @@ path = "src/main.rs"
 
 [dependencies]
 feedmind-core = { path = "../core" }
+feedmind-domain = { workspace = true }
+feedmind-ingest = { workspace = true }
+feedmind-rules = { workspace = true }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
