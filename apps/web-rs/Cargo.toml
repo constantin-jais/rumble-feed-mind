@@ -1,0 +1,9 @@
+[package]
+name = "feedmind-web-rs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+feedmind-domain = { workspace = true }
+leptos = { version = "0.7", default-features = false, features = ["ssr"] }
