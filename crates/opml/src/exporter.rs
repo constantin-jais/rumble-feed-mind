@@ -1,6 +1,6 @@
 //! OPML exporter
 
-use super::models::{OpmlDocument, OpmlOutline};
+use feedmind_domain::opml::{OpmlDocument, OpmlOutline};
 
 /// OPML exporter
 pub struct OpmlExporter;

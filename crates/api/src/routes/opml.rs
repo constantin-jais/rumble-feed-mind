@@ -17,7 +17,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::extractors::auth::CurrentUser;
 use crate::state::AppState;
 
-use feedmind_core::opml::{OpmlDocument, OpmlExporter, OpmlOutline, OpmlParser};
+use feedmind_opml::{OpmlDocument, OpmlExporter, OpmlOutline, OpmlParser};
 
 // =============================================================================
 // Request/Response DTOs

@@ -1,5 +1,5 @@
-//! Cryptographic utilities for encrypting API keys
+//! Crypto compatibility exports.
+//!
+//! New code should depend on `feedmind-crypto` directly.
 
-mod encryption;
-
-pub use encryption::{generate_master_key, EncryptedData, KeyEncryption};
+pub use feedmind_crypto::{generate_master_key, EncryptedData, KeyEncryption};

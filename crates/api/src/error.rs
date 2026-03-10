@@ -46,10 +46,6 @@ pub enum ApiError {
     /// Database error
     #[error("Database error")]
     Database(#[from] sqlx::Error),
-
-    /// Core error
-    #[error("{0}")]
-    Core(#[from] feedmind_core::Error),
 }
 
 /// Error response body
@@ -94,16 +90,6 @@ impl IntoResponse for ApiError {
                 "DATABASE_ERROR",
                 "Database error".to_string(),
             ),
-            ApiError::Core(e) => {
-                let msg = e.to_string();
-                match e {
-                    feedmind_core::Error::NotFound(_) => (StatusCode::NOT_FOUND, "NOT_FOUND", msg),
-                    feedmind_core::Error::Validation(_) => {
-                        (StatusCode::UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", msg)
-                    }
-                    _ => (StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", msg),
-                }
-            }
         };
 
         // Log internal errors

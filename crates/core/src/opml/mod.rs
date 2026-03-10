@@ -1,9 +1,5 @@
-//! OPML import/export
+//! OPML compatibility exports.
+//!
+//! New code should depend on `feedmind-opml` directly.
 
-mod exporter;
-mod models;
-mod parser;
-
-pub use exporter::OpmlExporter;
-pub use models::{OpmlDocument, OpmlOutline};
-pub use parser::OpmlParser;
+pub use feedmind_opml::{OpmlDocument, OpmlExporter, OpmlOutline, OpmlParser};

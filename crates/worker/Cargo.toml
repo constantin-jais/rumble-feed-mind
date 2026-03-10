@@ -10,7 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Internal
-feedmind-core = { workspace = true }
+feedmind-ingest = { workspace = true }
 
 # Async
 tokio = { workspace = true }

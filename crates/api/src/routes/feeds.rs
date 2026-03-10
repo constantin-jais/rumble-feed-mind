@@ -15,7 +15,8 @@ use crate::error::{ApiError, ApiResult};
 use crate::extractors::auth::CurrentUser;
 use crate::state::AppState;
 
-use feedmind_core::feed::{FeedFetcher, FeedItem};
+use feedmind_domain::feed::FeedItem;
+use feedmind_ingest::FeedFetcher;
 
 /// Create feed request
 #[derive(Debug, Deserialize, Validate)]

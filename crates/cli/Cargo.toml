@@ -9,9 +9,9 @@ name = "feedmind-cli"
 path = "src/main.rs"
 
 [dependencies]
-feedmind-core = { path = "../core" }
 feedmind-domain = { workspace = true }
 feedmind-ingest = { workspace = true }
+feedmind-opml = { workspace = true }
 feedmind-rules = { workspace = true }
 
 # Async runtime

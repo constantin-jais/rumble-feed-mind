@@ -1,6 +1,6 @@
 //! Application state
 
-use feedmind_core::crypto::KeyEncryption;
+use feedmind_crypto::KeyEncryption;
 use redis::aio::ConnectionManager;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;

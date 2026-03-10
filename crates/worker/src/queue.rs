@@ -1,6 +1,6 @@
 //! Redis-based job queue consumer
 
-use feedmind_core::feed::FeedFetcher;
+use feedmind_ingest::FeedFetcher;
 use redis::aio::ConnectionManager;
 use regex::Regex;
 use sqlx::postgres::PgPoolOptions;

@@ -1,6 +1,7 @@
 //! OPML parser using quick-xml for proper XML handling
 
-use super::models::{OpmlDocument, OpmlOutline};
+use feedmind_domain::opml::{OpmlDocument, OpmlOutline};
+
 use crate::error::{Error, Result};
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;

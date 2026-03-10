@@ -10,7 +10,7 @@ use rand::RngCore;
 use sha2::Sha256;
 use uuid::Uuid;
 
-use crate::error::{Error, Result};
+use crate::{Error, Result};
 
 /// Encrypted data with nonce
 #[derive(Debug, Clone)]

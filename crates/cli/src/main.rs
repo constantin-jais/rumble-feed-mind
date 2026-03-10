@@ -8,10 +8,10 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
-use feedmind_core::opml::{OpmlDocument, OpmlExporter, OpmlOutline, OpmlParser};
 use feedmind_domain::article::Article;
 use feedmind_domain::rules::{Rule, RuleAction};
 use feedmind_ingest::FeedFetcher;
+use feedmind_opml::{OpmlDocument, OpmlExporter, OpmlOutline, OpmlParser};
 use feedmind_rules::RuleEvaluator;
 
 #[derive(Parser)]

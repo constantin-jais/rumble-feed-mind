@@ -1,8 +1,10 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/crypto",
     "crates/domain",
     "crates/ingest",
+    "crates/opml",
     "crates/rules",
     "crates/sync",
     "crates/storage",
@@ -92,8 +94,10 @@ tokio-cron-scheduler = "0.13"
 stripe = { package = "async-stripe", version = "0.39", features = ["runtime-tokio-hyper"] }
 
 # Internal crates
+feedmind-crypto = { path = "crates/crypto" }
 feedmind-domain = { path = "crates/domain" }
 feedmind-ingest = { path = "crates/ingest" }
+feedmind-opml = { path = "crates/opml" }
 feedmind-rules = { path = "crates/rules" }
 feedmind-sync = { path = "crates/sync" }
 feedmind-storage = { path = "crates/storage" }

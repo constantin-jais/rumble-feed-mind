@@ -1105,7 +1105,10 @@ dependencies = [
  "chrono",
  "config 0.14.1",
  "dotenvy",
- "feedmind-core",
+ "feedmind-crypto",
+ "feedmind-domain",
+ "feedmind-ingest",
+ "feedmind-opml",
  "jsonwebtoken",
  "redis",
  "regex",
@@ -1132,9 +1135,9 @@ dependencies = [
  "chrono",
  "clap",
  "dotenvy",
- "feedmind-core",
  "feedmind-domain",
  "feedmind-ingest",
+ "feedmind-opml",
  "feedmind-rules",
  "serde",
  "serde_json",
@@ -1155,8 +1158,10 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "feed-rs",
+ "feedmind-crypto",
  "feedmind-domain",
  "feedmind-ingest",
+ "feedmind-opml",
  "feedmind-rules",
  "feedmind-storage",
  "feedmind-sync",
@@ -1175,6 +1180,19 @@ dependencies = [
  "tracing",
  "uuid 1.23.4",
  "validator",
+]
+
+[[package]]
+name = "feedmind-crypto"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "base64 0.22.1",
+ "hkdf",
+ "rand 0.8.6",
+ "sha2",
+ "thiserror 2.0.18",
+ "uuid 1.23.4",
 ]
 
 [[package]]
@@ -1198,6 +1216,16 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "uuid 1.23.4",
+]
+
+[[package]]
+name = "feedmind-opml"
+version = "0.1.0"
+dependencies = [
+ "feedmind-domain",
+ "quick-xml",
+ "thiserror 2.0.18",
+ "tracing",
 ]
 
 [[package]]
@@ -1248,7 +1276,7 @@ dependencies = [
  "chrono",
  "config 0.14.1",
  "dotenvy",
- "feedmind-core",
+ "feedmind-ingest",
  "redis",
  "regex",
  "serde",
