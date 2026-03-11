@@ -1,0 +1,57 @@
+name: Release artifacts
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  cli:
+    name: CLI ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Build CLI
+        run: cargo build --release -p feedmind-cli --target ${{ matrix.target }}
+      - name: Package Unix
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/feedmind-cli dist/
+          tar -C dist -czf feedmind-cli-${{ matrix.target }}.tar.gz feedmind-cli
+          shasum -a 256 feedmind-cli-${{ matrix.target }}.tar.gz > feedmind-cli-${{ matrix.target }}.tar.gz.sha256
+      - name: Package Windows
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Copy-Item target/${{ matrix.target }}/release/feedmind-cli.exe dist/
+          Compress-Archive -Path dist/feedmind-cli.exe -DestinationPath feedmind-cli-${{ matrix.target }}.zip
+          Get-FileHash feedmind-cli-${{ matrix.target }}.zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  feedmind-cli-${{ matrix.target }}.zip" } | Out-File feedmind-cli-${{ matrix.target }}.zip.sha256 -Encoding ascii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feedmind-cli-${{ matrix.target }}
+          path: |
+            feedmind-cli-${{ matrix.target }}.*

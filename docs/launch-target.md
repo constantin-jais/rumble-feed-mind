@@ -46,6 +46,17 @@ Le lancement produit cible n'est pas une simple démo web. C'est une distributio
 7. Voir une décision expliquée avec evidence.
 8. Exporter les données utilisateur.
 
+## Release artifacts
+
+La première matrice release couvre le binaire CLI :
+
+- `x86_64-unknown-linux-gnu`
+- `x86_64-apple-darwin`
+- `aarch64-apple-darwin`
+- `x86_64-pc-windows-msvc`
+
+Workflow : `.github/workflows/release.yml`.
+
 ## Gates launch
 
 ```bash

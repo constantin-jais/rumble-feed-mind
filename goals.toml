@@ -130,7 +130,7 @@ status = "pending"
 [[phases.phase_4.sub_milestones]]
 id = "release-matrix"
 name = "Matrix release Linux/macOS/Windows"
-status = "pending"
+status = "done"
 
 [[hard_gates]]
 id = "cargo_check"
