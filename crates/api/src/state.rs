@@ -1,10 +1,11 @@
 //! Application state
 
+use std::{path::Path, sync::Arc};
+
 use feedmind_crypto::KeyEncryption;
 use redis::aio::ConnectionManager;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
-use std::sync::Arc;
 use stripe::Client as StripeClient;
 
 use crate::config::{AppConfig, StripeConfig};
@@ -43,8 +44,12 @@ impl AppState {
             .connect(&config.database_url)
             .await?;
 
-        // Run migrations
-        sqlx::migrate!("../../migrations").run(&db).await?;
+        // Run migrations from the workspace migrations directory at runtime.
+        let migrations = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations");
+        sqlx::migrate::Migrator::new(migrations)
+            .await?
+            .run(&db)
+            .await?;
 
         // Connect to Redis
         let redis_client = redis::Client::open(config.redis_url.as_str())?;
