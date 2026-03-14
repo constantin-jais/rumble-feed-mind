@@ -2,6 +2,16 @@
 
 Moteur personnel de veille souveraine, **Rust-first**, multi-plateforme.
 
+## Rôle dans la stack
+
+- **Layer :** Rumble — dojo produit.
+- **Maturité :** `dojo`, prêt pour planification d'implémentation cadrée.
+- **Incrément courant :** P0 contrats + P1 preuve Rust/API.
+- **Apprentissage :** veille, ingestion, règles explicables, BYOK, export/handoff.
+- **Prochaine étape qualité :** tests runtime `CuratedItemExport`, classification logs, retrait des waivers advisories.
+
+Voir le cockpit écosystème : [`constantin-jais/ecosystem/status.md`](https://github.com/constantin-jais/constantin-jais/blob/main/ecosystem/status.md).
+
 ## Intention
 
 `rumble-feed-mind` transforme les flux RSS/Atom/JSON Feed en veille exploitable : import OPML, lecture, règles de tri, enrichissement IA en BYOK, explicabilité et distribution sur plusieurs surfaces utilisateur.
