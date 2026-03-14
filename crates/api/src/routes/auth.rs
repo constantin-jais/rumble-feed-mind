@@ -261,6 +261,18 @@ async fn me(
     })))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenKind {
+    JwtSession,
+    BiscuitDelegation,
+}
+
+impl TokenKind {
+    pub fn can_authorize_harness_delegation(self) -> bool {
+        matches!(self, Self::BiscuitDelegation)
+    }
+}
+
 /// Generate JWT token
 fn generate_jwt(
     user: &UserRow,
@@ -296,4 +308,19 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/auth/refresh", post(refresh))
         .route("/api/v1/auth/logout", post(logout))
         .route("/api/v1/auth/me", axum::routing::get(me))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn jwt_session_tokens_never_authorize_harness_delegation() {
+        assert!(!TokenKind::JwtSession.can_authorize_harness_delegation());
+    }
+
+    #[test]
+    fn biscuit_delegation_tokens_authorize_harness_delegation_boundary() {
+        assert!(TokenKind::BiscuitDelegation.can_authorize_harness_delegation());
+    }
 }

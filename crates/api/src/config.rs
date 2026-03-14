@@ -159,3 +159,42 @@ impl AppConfig {
         self.stripe.is_configured()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stripe_is_disabled_when_secret_key_is_absent() {
+        let config = StripeConfig {
+            stripe_secret_key: None,
+            stripe_publishable_key: Some("pk_fixture".to_string()),
+            stripe_webhook_secret: Some("whsec_fixture".to_string()),
+            stripe_price_pro_monthly: None,
+            stripe_price_pro_annual: None,
+            stripe_price_team_monthly: None,
+            stripe_price_team_annual: None,
+            stripe_price_ai_tokens: None,
+            stripe_price_api_calls: None,
+        };
+
+        assert!(!config.is_configured());
+    }
+
+    #[test]
+    fn stripe_is_enabled_only_by_explicit_secret_key() {
+        let config = StripeConfig {
+            stripe_secret_key: Some("stripe-enabled-fixture".to_string()),
+            stripe_publishable_key: None,
+            stripe_webhook_secret: None,
+            stripe_price_pro_monthly: None,
+            stripe_price_pro_annual: None,
+            stripe_price_team_monthly: None,
+            stripe_price_team_annual: None,
+            stripe_price_ai_tokens: None,
+            stripe_price_api_calls: None,
+        };
+
+        assert!(config.is_configured());
+    }
+}

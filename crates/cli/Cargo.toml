@@ -2,6 +2,7 @@
 name = "feedmind-cli"
 version = "0.1.0"
 edition = "2021"
+license.workspace = true
 description = "FeedMind CLI tools for import/export and management"
 
 [[bin]]

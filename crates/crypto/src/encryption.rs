@@ -1,5 +1,7 @@
 //! API key encryption using AES-256-GCM with HKDF key derivation
 
+use std::fmt;
+
 use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
@@ -13,7 +15,7 @@ use uuid::Uuid;
 use crate::{Error, Result};
 
 /// Encrypted data with nonce
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct EncryptedData {
     /// Base64-encoded ciphertext
     pub ciphertext: String,
@@ -21,6 +23,17 @@ pub struct EncryptedData {
     pub nonce: String,
     /// Key version used for encryption
     pub key_version: u32,
+}
+
+impl fmt::Debug for EncryptedData {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("EncryptedData")
+            .field("ciphertext", &"<redacted>")
+            .field("nonce", &"<redacted>")
+            .field("key_version", &self.key_version)
+            .finish()
+    }
 }
 
 /// Handles encryption/decryption of API keys using per-user derived keys
@@ -150,7 +163,7 @@ mod tests {
         let encryption = KeyEncryption::from_base64(&master_key, 1).unwrap();
 
         let user_id = Uuid::new_v4();
-        let api_key = "sk-ant-api123456789";
+        let api_key = "provider-key-fixture-123456789";
 
         let encrypted = encryption.encrypt(user_id, api_key).unwrap();
         let decrypted = encryption.decrypt(user_id, &encrypted).unwrap();
@@ -165,7 +178,7 @@ mod tests {
 
         let user1 = Uuid::new_v4();
         let user2 = Uuid::new_v4();
-        let api_key = "sk-ant-api123456789";
+        let api_key = "provider-key-fixture-123456789";
 
         let encrypted1 = encryption.encrypt(user1, api_key).unwrap();
         let encrypted2 = encryption.encrypt(user2, api_key).unwrap();
@@ -201,5 +214,21 @@ mod tests {
     fn test_invalid_master_key_length() {
         let result = KeyEncryption::new(&[0u8; 16], 1);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn encrypted_data_debug_redacts_ciphertext_and_nonce() {
+        let master_key = generate_master_key();
+        let encryption = KeyEncryption::from_base64(&master_key, 1).unwrap();
+        let user_id = Uuid::new_v4();
+        let encrypted = encryption
+            .encrypt(user_id, "provider-key-fixture-123456789")
+            .unwrap();
+
+        let debug = format!("{encrypted:?}");
+
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains(&encrypted.ciphertext));
+        assert!(!debug.contains(&encrypted.nonce));
     }
 }
