@@ -1,0 +1,7 @@
+{
+  "name": "Keep Rust sovereignty articles",
+  "pattern": "(?i)(rust|sovereign|local-first)",
+  "action": "star",
+  "priority": 10,
+  "stop_on_match": true
+}
