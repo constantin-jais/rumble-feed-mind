@@ -1,4 +1,4 @@
-# ADR 0002 — Pivot stack Rust-first produit
+# ADR 0002 — Stack produit Rust-first / Dioxus
 
 ## Statut
 
@@ -6,51 +6,57 @@ Acceptée.
 
 ## Contexte
 
-L'ADR 0001 posait une trajectoire prudente : Rust au cœur, web/PWA existante comme surface principale, desktop Tauri plus tard, mobile API-first. Cette trajectoire protège la livraison court terme, mais elle ne suffit pas pour l'ambition produit : distribution multi-plateforme souveraine avec un maximum d'invariants, d'UI state et de logique de synchronisation contrôlés en Rust.
+L'écosystème Rumble converge vers une règle simple : les produits interactifs doivent partager une trajectoire Rust-first afin d'éviter la fragmentation frontend, la duplication des invariants métier et les dépendances implicites à des stacks différentes.
 
-Le projet pivote donc vers l'option C : **Rust-first sur le cœur, les adapters et les surfaces produit**, en gardant les composants existants comme référence de migration, pas comme cible durable.
+`rumble-feed-mind` avait une trajectoire historique web/mobile orientée TypeScript. Cette trajectoire reste utile comme référence fonctionnelle, mais elle ne doit pas devenir la destination durable du produit.
 
 ## Décision
 
-- Le cœur métier est éclaté progressivement en crates Rust spécialisées : `domain`, `ingest`, `rules`, `ai`, `sync`, `storage`.
-- L'API serveur reste Rust/Axum.
-- Le worker reste Rust/Tokio.
-- La CLI devient le premier consommateur de référence du core.
-- La nouvelle UI cible est Rust : **Leptos** pour l'interface web/WASM.
-- La distribution desktop/mobile cible est **Tauri 2** autour de l'UI Rust/WebView.
-- L'application Next.js existante devient `legacy web` : référence fonctionnelle et source de migration, mais pas destination long terme.
-- Les clients ne doivent pas porter d'invariants métier en TypeScript.
+`rumble-feed-mind` adopte la trajectoire commune des Rumble interactifs :
+
+- cœur métier en crates Rust spécialisées ;
+- API serveur Rust/Axum ;
+- worker Rust/Tokio ;
+- CLI comme consommateur de référence ;
+- UI cible : **Dioxus** ;
+- distribution desktop/mobile à évaluer via la trajectoire Dioxus/native/web du reste de l'écosystème ;
+- surfaces TypeScript existantes : legacy/reference de migration, pas cible durable ;
+- aucun invariant métier durable ne doit vivre uniquement côté TypeScript.
 
 ## Stack cible
 
 | Couche | Choix | Raison |
 | --- | --- | --- |
-| Domaine | Rust crates pures | testabilité, portabilité, déterminisme |
-| API | Axum + Tokio | existant, robuste, souverain |
-| Jobs | Tokio worker + Redis Streams | existant, scalable, self-hostable |
+| Domaine | Rust crates pures (`domain`, `ingest`, `rules`, puis `ai`, `sync`, `storage`) | testabilité, portabilité, déterminisme |
+| API | Axum + Tokio | existant, robuste, self-hostable |
+| Jobs | Tokio worker + Redis Streams | existant, scalable, souverain si self-hosté |
 | DB serveur | PostgreSQL + SQLx | existant, requêtes typées |
 | Local cache futur | SQLite + SQLx | offline desktop/mobile possible |
-| Web UI | Leptos/WASM | UI Rust, SSR/CSR possible, bonne intégration web |
-| Desktop/mobile shell | Tauri 2 | packaging multi-OS, surface système minimale |
-| Release | cargo-dist/gear-cable à évaluer | artefacts reproductibles |
+| UI interactive | Dioxus | convergence Rumble, Rust-first, multi-target |
+| Release | gear-cable à évaluer | artefacts reproductibles et distribution souveraine |
 
 ## Conséquences
 
-- La priorité n'est plus de consolider Next.js, mais d'extraire les contrats UI et de préparer une UI Rust.
-- Le TypeScript restant est toléré uniquement comme transition.
-- Les nouveaux états UI complexes doivent être modélisés en Rust si réutilisables.
-- Les tests de domaine précèdent toute migration de surface.
-- Le risque UI augmente : Leptos/Tauri mobile sont moins standards qu'un couple Next/Expo. Ce risque est accepté pour maximiser souveraineté, cohérence et distribution Rust-first.
+- Les extractions de crates Rust priment sur les nouvelles fonctionnalités UI.
+- La surface web existante reste une référence temporaire et une source de tests de comportement.
+- Les nouveaux flux produit doivent être exprimés en domaine Rust avant UI.
+- Les règles, décisions, explications et exports doivent rester testables sans frontend.
+- Le produit reste compatible avec le harness : specs → packages/exports → validation → planification.
 
 ## Garde-fous
 
-- Pas de big bang : Next.js reste disponible tant que la nouvelle UI ne couvre pas les parcours critiques.
-- Pas d'ajout Tauri/mobile tant que les crates domaine et contrats UI ne sont pas stabilisés.
-- Chaque extraction de crate doit garder `cargo test` et `clippy -D warnings` verts.
-- Chaque nouveau choix de crate majeure doit passer par ADR et audit licence.
+- Pas de big bang : la surface existante peut rester tant que Dioxus ne couvre pas les parcours critiques.
+- Toute nouvelle dépendance frontend majeure nécessite ADR.
+- Chaque extraction de crate doit garder `cargo test --workspace` vert.
+- Aucun secret/BYOK ne doit être exposé au frontend durablement.
+- Les fonctionnalités réutilisables d'ingestion doivent être candidates Wrench plutôt que rester cachées dans le produit.
 
 ## Alternatives rejetées
 
-- **Next.js durable + Rust backend** : trop proche d'un SaaS web classique, duplication probable des invariants côté client.
-- **Expo mobile durable** : rapide, mais augmente la surface TypeScript et la dépendance à un écosystème non-Rust.
-- **Dioxus unique pour toutes les surfaces** : intéressant mais moins aligné avec le besoin serveur/API existant et packaging Tauri déjà naturel pour desktop/mobile.
+- **Expo durable** : rapide mobile-first, mais trop éloigné de la convergence Rust-first.
+- **Next.js durable + Rust backend** : risque de duplication des invariants métier côté client.
+- **Leptos/Tauri comme cible spécifique FeedMind** : cohérent Rust, mais crée une exception de stack par rapport aux autres Rumble interactifs.
+
+## Notes licence
+
+Le projet s'aligne sur la doctrine permissive de l'écosystème et utilise MIT au niveau workspace. Toute exception future doit être documentée par ADR/waiver.

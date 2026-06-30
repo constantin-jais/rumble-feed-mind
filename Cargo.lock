@@ -972,6 +972,8 @@ dependencies = [
  "chrono",
  "feed-rs",
  "feedmind-domain",
+ "feedmind-ingest",
+ "feedmind-rules",
  "hkdf",
  "quick-xml",
  "rand 0.8.6",
