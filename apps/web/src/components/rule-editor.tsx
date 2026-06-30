@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { AlertCircle, Eye, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,12 +70,13 @@ export function RuleEditor({
   const [feedId, setFeedId] = useState<string | undefined>(defaultFeedId);
   const [folderId, setFolderId] = useState<string | undefined>(defaultFolderId);
   const [stopOnMatch, setStopOnMatch] = useState(false);
-  const [regexError, setRegexError] = useState<string | null>(null);
 
   const isEditing = !!rule;
 
   useEffect(() => {
     if (rule) {
+      // Form state is intentionally reset when opening the editor on another rule.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setName(rule.name);
       const config = rule.config as unknown as RuleConfig;
       setPattern(config?.pattern || "");
@@ -100,20 +101,17 @@ export function RuleEditor({
       setFolderId(defaultFolderId);
       setStopOnMatch(false);
     }
-    setRegexError(null);
   }, [rule, open, defaultFeedId, defaultFolderId]);
 
-  // Validate regex on pattern change
-  useEffect(() => {
+  const regexError = useMemo(() => {
     if (!pattern) {
-      setRegexError(null);
-      return;
+      return null;
     }
     try {
       new RegExp(pattern, caseSensitive ? "" : "i");
-      setRegexError(null);
+      return null;
     } catch (e) {
-      setRegexError((e as Error).message);
+      return (e as Error).message;
     }
   }, [pattern, caseSensitive]);
 

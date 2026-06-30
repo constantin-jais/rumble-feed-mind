@@ -433,14 +433,13 @@ async fn update_rule(
     Json(req): Json<UpdateRuleRequest>,
 ) -> ApiResult<Json<RuleResponse>> {
     // Verify rule exists
-    let existing: Option<RuleRow> = sqlx::query_as(
-        "SELECT * FROM rules WHERE id = $1 AND user_id = $2",
-    )
-    .bind(rule_id)
-    .bind(user.id)
-    .fetch_optional(state.db())
-    .await
-    .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+    let existing: Option<RuleRow> =
+        sqlx::query_as("SELECT * FROM rules WHERE id = $1 AND user_id = $2")
+            .bind(rule_id)
+            .bind(user.id)
+            .fetch_optional(state.db())
+            .await
+            .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
     let existing = existing.ok_or_else(|| ApiError::NotFound("Rule not found".to_string()))?;
 
@@ -453,15 +452,17 @@ async fn update_rule(
     }
 
     let action = req.action.as_ref().unwrap_or(&existing.action);
-    let action_params = req.action_params.as_ref().or(existing.action_params.as_ref());
+    let action_params = req
+        .action_params
+        .as_ref()
+        .or(existing.action_params.as_ref());
     validate_action_params(action, action_params)?;
 
     // Build update query
     let config_json = req
         .config
         .as_ref()
-        .map(|c| serde_json::to_value(c).ok())
-        .flatten();
+        .and_then(|c| serde_json::to_value(c).ok());
 
     let rule: RuleRow = sqlx::query_as(
         r#"
@@ -691,13 +692,15 @@ async fn reorder_rules(
     // Update priorities in order (highest priority first)
     for (index, rule_id) in req.rule_ids.iter().enumerate() {
         let priority = (req.rule_ids.len() - index) as i32;
-        sqlx::query("UPDATE rules SET priority = $3, updated_at = NOW() WHERE id = $1 AND user_id = $2")
-            .bind(rule_id)
-            .bind(user.id)
-            .bind(priority)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Failed to update rule priority: {}", e)))?;
+        sqlx::query(
+            "UPDATE rules SET priority = $3, updated_at = NOW() WHERE id = $1 AND user_id = $2",
+        )
+        .bind(rule_id)
+        .bind(user.id)
+        .bind(priority)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Failed to update rule priority: {}", e)))?;
     }
 
     tx.commit()
@@ -705,11 +708,16 @@ async fn reorder_rules(
         .map_err(|e| ApiError::Internal(format!("Commit error: {}", e)))?;
 
     // Return updated list
-    list_rules(State(state), user, Query(ListRulesQuery {
-        feed_id: None,
-        folder_id: None,
-        is_active: None,
-    })).await
+    list_rules(
+        State(state),
+        user,
+        Query(ListRulesQuery {
+            feed_id: None,
+            folder_id: None,
+            is_active: None,
+        }),
+    )
+    .await
 }
 
 // =============================================================================
@@ -726,5 +734,8 @@ pub fn router() -> Router<AppState> {
             "/api/v1/rules/{id}",
             get(get_rule).put(update_rule).delete(delete_rule),
         )
-        .route("/api/v1/rules/{id}/toggle", axum::routing::post(toggle_rule))
+        .route(
+            "/api/v1/rules/{id}/toggle",
+            axum::routing::post(toggle_rule),
+        )
 }

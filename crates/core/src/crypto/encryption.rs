@@ -87,7 +87,7 @@ impl KeyEncryption {
 
         Ok(EncryptedData {
             ciphertext: BASE64.encode(&ciphertext),
-            nonce: BASE64.encode(&nonce_bytes),
+            nonce: BASE64.encode(nonce_bytes),
             key_version: self.key_version,
         })
     }

@@ -427,7 +427,9 @@ async fn remove_tag_from_article(
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
     if result.rows_affected() == 0 {
-        return Err(ApiError::NotFound("Tag not associated with article".to_string()));
+        return Err(ApiError::NotFound(
+            "Tag not associated with article".to_string(),
+        ));
     }
 
     Ok(Json(serde_json::json!({ "data": { "success": true } })))

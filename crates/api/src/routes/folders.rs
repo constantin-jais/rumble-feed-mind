@@ -386,14 +386,13 @@ async fn reorder_folder(
     Json(req): Json<ReorderFolderRequest>,
 ) -> ApiResult<Json<FolderResponse>> {
     // Get current folder info
-    let current: Option<(Option<Uuid>, i32)> = sqlx::query_as(
-        "SELECT parent_id, position FROM folders WHERE id = $1 AND user_id = $2",
-    )
-    .bind(folder_id)
-    .bind(user.id)
-    .fetch_optional(state.db())
-    .await
-    .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+    let current: Option<(Option<Uuid>, i32)> =
+        sqlx::query_as("SELECT parent_id, position FROM folders WHERE id = $1 AND user_id = $2")
+            .bind(folder_id)
+            .bind(user.id)
+            .fetch_optional(state.db())
+            .await
+            .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
     let (parent_id, current_position) =
         current.ok_or_else(|| ApiError::NotFound("Folder not found".to_string()))?;
@@ -498,5 +497,8 @@ pub fn router() -> Router<AppState> {
             "/api/v1/folders/{id}",
             get(get_folder).put(update_folder).delete(delete_folder),
         )
-        .route("/api/v1/folders/{id}/reorder", axum::routing::post(reorder_folder))
+        .route(
+            "/api/v1/folders/{id}/reorder",
+            axum::routing::post(reorder_folder),
+        )
 }

@@ -50,7 +50,9 @@ pub async fn list_invoices(
     user: CurrentUser,
     Query(params): Query<InvoiceListParams>,
 ) -> ApiResult<Json<ListResponse<InvoiceResponse>>> {
-    let stripe = state.stripe().ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
+    let stripe = state
+        .stripe()
+        .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
     let service = BillingService::new(state.db(), stripe, state.stripe_config());
 
     // Limit to 100 max
@@ -71,12 +73,16 @@ pub async fn get_invoice(
     user: CurrentUser,
     Path(id): Path<Uuid>,
 ) -> ApiResult<Json<DataResponse<InvoiceResponse>>> {
-    let stripe = state.stripe().ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
+    let stripe = state
+        .stripe()
+        .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
     let service = BillingService::new(state.db(), stripe, state.stripe_config());
 
     let invoice = service.get_invoice(user.id, id).await?;
 
-    Ok(Json(DataResponse { data: invoice.into() }))
+    Ok(Json(DataResponse {
+        data: invoice.into(),
+    }))
 }
 
 /// Get invoice PDF (redirect to Stripe)
@@ -85,12 +91,15 @@ pub async fn get_invoice_pdf(
     user: CurrentUser,
     Path(id): Path<Uuid>,
 ) -> ApiResult<impl IntoResponse> {
-    let stripe = state.stripe().ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
+    let stripe = state
+        .stripe()
+        .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
     let service = BillingService::new(state.db(), stripe, state.stripe_config());
 
     let invoice = service.get_invoice(user.id, id).await?;
 
-    let pdf_url = invoice.invoice_pdf
+    let pdf_url = invoice
+        .invoice_pdf
         .ok_or_else(|| ApiError::NotFound("Invoice PDF not available".to_string()))?;
 
     Ok(Redirect::temporary(&pdf_url))

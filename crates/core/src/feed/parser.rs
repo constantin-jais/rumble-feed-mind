@@ -2,7 +2,7 @@
 
 use super::models::{Feed, FeedItem, FeedType};
 use crate::error::{Error, Result};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use feed_rs::parser;
 use uuid::Uuid;
 
@@ -54,7 +54,7 @@ impl FeedParser {
             .entries
             .into_iter()
             .take(500) // AMD-003: Max 500 items per fetch
-            .map(|entry| Self::parse_entry(entry))
+            .map(Self::parse_entry)
             .collect();
 
         Ok((feed, items))
@@ -94,9 +94,9 @@ impl FeedParser {
 
         let author = entry.authors.first().map(|a| a.name.clone());
 
-        let published_at = entry.published.map(DateTime::<Utc>::from);
+        let published_at = entry.published;
 
-        let updated_at = entry.updated.map(DateTime::<Utc>::from);
+        let updated_at = entry.updated;
 
         let categories: Vec<String> = entry.categories.into_iter().map(|c| c.term).collect();
 

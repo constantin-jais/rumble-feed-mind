@@ -108,7 +108,6 @@ impl OpmlExporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::opml::OpmlParser;
 
     // NOTE: Roundtrip test disabled because scraper HTML parser doesn't
     // handle XML custom elements correctly. See opml/parser.rs for details.

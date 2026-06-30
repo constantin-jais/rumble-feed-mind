@@ -6,7 +6,7 @@
 //! - Day 7: Final warning, downgrade to Free tier
 //! - Day 30: Account suspension
 
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -39,7 +39,10 @@ pub struct DunningResult {
 }
 
 /// Check dunning status for all users
-pub async fn check_dunning_status(db: &PgPool, config: &DunningConfig) -> Result<DunningResult, sqlx::Error> {
+pub async fn check_dunning_status(
+    db: &PgPool,
+    config: &DunningConfig,
+) -> Result<DunningResult, sqlx::Error> {
     let mut result = DunningResult {
         users_checked: 0,
         emails_sent: 0,
@@ -94,9 +97,14 @@ pub async fn check_dunning_status(db: &PgPool, config: &DunningConfig) -> Result
 
         // Execute action
         match action {
-            DunningAction::SendDay1Notice | DunningAction::SendDay3Reminder | DunningAction::SendDay7Warning => {
+            DunningAction::SendDay1Notice
+            | DunningAction::SendDay3Reminder
+            | DunningAction::SendDay7Warning => {
                 if let Err(e) = queue_dunning_email(db, &sub, &action).await {
-                    result.errors.push(format!("Failed to queue email for user {}: {}", sub.user_id, e));
+                    result.errors.push(format!(
+                        "Failed to queue email for user {}: {}",
+                        sub.user_id, e
+                    ));
                 } else {
                     result.emails_sent += 1;
                     log_dunning_action(db, &sub, "email_sent", &action).await?;
@@ -108,7 +116,9 @@ pub async fn check_dunning_status(db: &PgPool, config: &DunningConfig) -> Result
                     continue;
                 }
                 if let Err(e) = downgrade_to_free(db, sub.user_id, &sub.plan_name).await {
-                    result.errors.push(format!("Failed to downgrade user {}: {}", sub.user_id, e));
+                    result
+                        .errors
+                        .push(format!("Failed to downgrade user {}: {}", sub.user_id, e));
                 } else {
                     result.users_downgraded += 1;
                     log_dunning_action(db, &sub, "downgrade", &action).await?;
@@ -120,7 +130,9 @@ pub async fn check_dunning_status(db: &PgPool, config: &DunningConfig) -> Result
                     continue;
                 }
                 if let Err(e) = suspend_account(db, sub.user_id).await {
-                    result.errors.push(format!("Failed to suspend user {}: {}", sub.user_id, e));
+                    result
+                        .errors
+                        .push(format!("Failed to suspend user {}: {}", sub.user_id, e));
                 } else {
                     result.users_suspended += 1;
                     log_dunning_action(db, &sub, "suspend", &action).await?;
@@ -219,7 +231,11 @@ impl DunningAction {
     }
 }
 
-async fn should_skip_action(db: &PgPool, user_id: Uuid, action: &DunningAction) -> Result<bool, sqlx::Error> {
+async fn should_skip_action(
+    db: &PgPool,
+    user_id: Uuid,
+    action: &DunningAction,
+) -> Result<bool, sqlx::Error> {
     if *action == DunningAction::None {
         return Ok(true);
     }
@@ -285,7 +301,11 @@ async fn log_dunning_action(
     Ok(())
 }
 
-async fn downgrade_to_free(db: &PgPool, user_id: Uuid, previous_plan: &str) -> Result<(), sqlx::Error> {
+async fn downgrade_to_free(
+    db: &PgPool,
+    user_id: Uuid,
+    previous_plan: &str,
+) -> Result<(), sqlx::Error> {
     // Update user to free tier
     sqlx::query(
         r#"
@@ -325,11 +345,10 @@ async fn suspend_account(db: &PgPool, user_id: Uuid) -> Result<(), sqlx::Error> 
 
 /// Clean up webhook events older than 30 days
 pub async fn cleanup_webhook_events(db: &PgPool) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query(
-        "DELETE FROM webhook_events WHERE created_at < NOW() - INTERVAL '30 days'",
-    )
-    .execute(db)
-    .await?;
+    let result =
+        sqlx::query("DELETE FROM webhook_events WHERE created_at < NOW() - INTERVAL '30 days'")
+            .execute(db)
+            .await?;
 
     let deleted = result.rows_affected();
     if deleted > 0 {

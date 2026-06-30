@@ -1,0 +1,113 @@
+version = "1"
+project = "rumble-feed-mind"
+current_phase = "phase_2"
+
+[phases.phase_0]
+name = "Doctrine et reproductibilité"
+status = "done"
+
+[[phases.phase_0.sub_milestones]]
+id = "agents"
+name = "AGENTS.md local"
+status = "done"
+
+[[phases.phase_0.sub_milestones]]
+id = "readme"
+name = "README racine Rust-core"
+status = "done"
+
+[[phases.phase_0.sub_milestones]]
+id = "lockfile"
+name = "Cargo.lock versionné"
+status = "done"
+
+[[phases.phase_0.sub_milestones]]
+id = "gates"
+name = "Gates agentic-harness déclarées"
+status = "done"
+
+[phases.phase_1]
+name = "Qualité Rust minimale"
+status = "done"
+
+[[phases.phase_1.sub_milestones]]
+id = "warnings"
+name = "Warnings Rust supprimés ou justifiés"
+status = "done"
+
+[[phases.phase_1.sub_milestones]]
+id = "clippy"
+name = "clippy -D warnings vert"
+status = "done"
+
+[[phases.phase_1.sub_milestones]]
+id = "tests"
+name = "Tests workspace verts"
+status = "done"
+
+[phases.phase_2]
+name = "Core domain stable"
+status = "in-progress"
+
+[[phases.phase_2.sub_milestones]]
+id = "ports"
+name = "Ports domaine/adapters identifiés"
+status = "pending"
+
+[[phases.phase_2.sub_milestones]]
+id = "core-coverage"
+name = "Couverture core prioritaire"
+status = "pending"
+
+[phases.phase_3]
+name = "Distribution multi-plateforme"
+status = "pending"
+
+[[phases.phase_3.sub_milestones]]
+id = "web-pwa"
+name = "Web/PWA stabilisée"
+status = "pending"
+
+[[phases.phase_3.sub_milestones]]
+id = "desktop-decision"
+name = "Décision Tauri documentée"
+status = "pending"
+
+[[phases.phase_3.sub_milestones]]
+id = "release-matrix"
+name = "Matrix release Linux/macOS/Windows"
+status = "pending"
+
+[[hard_gates]]
+id = "cargo_check"
+name = "cargo check"
+status = "done"
+
+[[hard_gates]]
+id = "cargo_test"
+name = "cargo test --workspace"
+status = "done"
+
+[[hard_gates]]
+id = "clippy_warnings"
+name = "cargo clippy -D warnings"
+status = "done"
+
+[[hard_gates]]
+id = "docs"
+name = "README/AGENTS/ADR à jour"
+status = "done"
+
+[[observability]]
+id = "rust_warnings"
+name = "Warnings cargo check"
+value = 0
+target = 0
+lower_is_better = true
+
+[[observability]]
+id = "core_tests"
+name = "Tests core"
+value = 31
+target = 31
+lower_is_better = false

@@ -1,7 +1,10 @@
 //! FeedMind API Server
 
-use std::net::SocketAddr;
+// TODO(refactor): remove once scaffolded billing/usage/rate-limit code is fully wired.
+#![allow(dead_code)]
+
 use axum::Router;
+use std::net::SocketAddr;
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::TraceLayer,
@@ -11,10 +14,10 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod config;
 mod error;
+mod extractors;
+mod middleware;
 mod routes;
 mod state;
-mod middleware;
-mod extractors;
 
 use config::AppConfig;
 use state::AppState;
@@ -26,8 +29,10 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialize tracing
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| "feedmind_api=debug,tower_http=debug".into()))
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "feedmind_api=debug,tower_http=debug".into()),
+        )
         .with(tracing_subscriber::fmt::layer().json())
         .init();
 

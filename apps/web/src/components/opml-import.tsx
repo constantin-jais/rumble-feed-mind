@@ -77,7 +77,6 @@ export function OpmlImport({ trigger, onSuccess }: OpmlImportProps) {
 
     // Parse outlines - handle both flat and nested structures
     const processOutline = (outline: Element, parentFolder?: string) => {
-      const type = outline.getAttribute("type");
       const xmlUrl = outline.getAttribute("xmlUrl");
       const feedTitle = outline.getAttribute("title") || outline.getAttribute("text") || "Sans titre";
 
@@ -154,7 +153,7 @@ export function OpmlImport({ trigger, onSuccess }: OpmlImportProps) {
     setError(null);
 
     try {
-      const result = await importMutation.mutateAsync(file);
+      await importMutation.mutateAsync(file);
       setState("success");
       // Close dialog after a short delay on success
       setTimeout(() => {
@@ -183,7 +182,7 @@ export function OpmlImport({ trigger, onSuccess }: OpmlImportProps) {
         <DialogHeader>
           <DialogTitle>Importer des flux OPML</DialogTitle>
           <DialogDescription>
-            Importez vos abonnements depuis un fichier OPML exporte d'un autre lecteur RSS.
+            Importez vos abonnements depuis un fichier OPML exporte d&apos;un autre lecteur RSS.
           </DialogDescription>
         </DialogHeader>
 

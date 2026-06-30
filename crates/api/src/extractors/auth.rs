@@ -85,12 +85,13 @@ impl FromRequestParts<AppState> for CurrentUser {
         if account_status == AccountStatus::Suspended {
             // Check if this is a billing or read-only request
             let path = parts.uri.path();
-            let is_billing = path.starts_with("/api/v1/billing") || path.starts_with("/webhooks/stripe");
+            let is_billing =
+                path.starts_with("/api/v1/billing") || path.starts_with("/webhooks/stripe");
             let is_opml_export = path == "/api/v1/opml/export";
 
             if !is_billing && !is_opml_export {
                 return Err(ApiError::Forbidden(
-                    "Account suspended. Please update your payment method to continue.".to_string()
+                    "Account suspended. Please update your payment method to continue.".to_string(),
                 ));
             }
         }

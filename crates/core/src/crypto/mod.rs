@@ -2,4 +2,4 @@
 
 mod encryption;
 
-pub use encryption::{EncryptedData, KeyEncryption};
+pub use encryption::{generate_master_key, EncryptedData, KeyEncryption};

@@ -2,7 +2,7 @@
 
 use super::models::{Rule, RuleMatch};
 use crate::article::Article;
-use crate::error::{Error, Result};
+use crate::error::Result;
 use regex::Regex;
 
 /// Compiled regex rule for fast evaluation

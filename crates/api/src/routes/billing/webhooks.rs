@@ -56,7 +56,7 @@ pub async fn handle_webhook(
     };
 
     // Check idempotency - skip if already processed
-    let already_processed = check_idempotency(state.db(), &event.id.to_string()).await;
+    let already_processed = check_idempotency(state.db(), event.id.as_ref()).await;
     if already_processed {
         tracing::debug!(event_id = %event.id, "Webhook event already processed, skipping");
         return StatusCode::OK;
@@ -69,7 +69,7 @@ pub async fn handle_webhook(
     }
 
     // Mark as processed
-    if let Err(e) = mark_processed(state.db(), &event.id.to_string(), &event.type_.to_string()).await {
+    if let Err(e) = mark_processed(state.db(), event.id.as_ref(), &event.type_.to_string()).await {
         tracing::error!(event_id = %event.id, error = %e, "Failed to mark webhook as processed");
     }
 
@@ -89,7 +89,11 @@ async fn check_idempotency(db: &sqlx::PgPool, event_id: &str) -> bool {
 }
 
 /// Mark event as processed
-async fn mark_processed(db: &sqlx::PgPool, event_id: &str, event_type: &str) -> Result<(), sqlx::Error> {
+async fn mark_processed(
+    db: &sqlx::PgPool,
+    event_id: &str,
+    event_type: &str,
+) -> Result<(), sqlx::Error> {
     sqlx::query(
         "INSERT INTO webhook_events (stripe_event_id, event_type) VALUES ($1, $2) ON CONFLICT DO NOTHING",
     )
@@ -108,8 +112,7 @@ async fn process_event(state: &AppState, event: &Event) -> Result<(), ApiError> 
         // ====================================================================
         // SUBSCRIPTION EVENTS
         // ====================================================================
-        EventType::CustomerSubscriptionCreated
-        | EventType::CustomerSubscriptionUpdated => {
+        EventType::CustomerSubscriptionCreated | EventType::CustomerSubscriptionUpdated => {
             if let EventObject::Subscription(sub) = &event.data.object {
                 handle_subscription_update(db, sub).await?;
             }
@@ -124,9 +127,7 @@ async fn process_event(state: &AppState, event: &Event) -> Result<(), ApiError> 
         // ====================================================================
         // INVOICE EVENTS
         // ====================================================================
-        EventType::InvoiceCreated
-        | EventType::InvoiceUpdated
-        | EventType::InvoiceFinalized => {
+        EventType::InvoiceCreated | EventType::InvoiceUpdated | EventType::InvoiceFinalized => {
             if let EventObject::Invoice(invoice) = &event.data.object {
                 handle_invoice_update(db, invoice).await?;
             }
@@ -154,7 +155,7 @@ async fn process_event(state: &AppState, event: &Event) -> Result<(), ApiError> 
 
         EventType::PaymentMethodDetached => {
             if let EventObject::PaymentMethod(pm) = &event.data.object {
-                handle_payment_method_detached(db, &pm.id.to_string()).await?;
+                handle_payment_method_detached(db, pm.id.as_ref()).await?;
             }
         }
 
@@ -213,7 +214,10 @@ async fn handle_subscription_update(
     .bind(DateTime::from_timestamp(sub.current_period_start, 0))
     .bind(DateTime::from_timestamp(sub.current_period_end, 0))
     .bind(sub.cancel_at_period_end)
-    .bind(sub.canceled_at.map(|ts| DateTime::from_timestamp(ts, 0)).flatten())
+    .bind(
+        sub.canceled_at
+            .and_then(|ts| DateTime::from_timestamp(ts, 0)),
+    )
     .bind(&stripe_sub_id)
     .execute(db)
     .await?;
@@ -247,12 +251,11 @@ async fn handle_subscription_update(
         .await?;
 
         // Also restore user account status if needed
-        let user_id: Option<(Uuid,)> = sqlx::query_as(
-            "SELECT user_id FROM subscriptions WHERE stripe_subscription_id = $1",
-        )
-        .bind(&stripe_sub_id)
-        .fetch_optional(db)
-        .await?;
+        let user_id: Option<(Uuid,)> =
+            sqlx::query_as("SELECT user_id FROM subscriptions WHERE stripe_subscription_id = $1")
+                .bind(&stripe_sub_id)
+                .fetch_optional(db)
+                .await?;
 
         if let Some((user_id,)) = user_id {
             sqlx::query(
@@ -322,12 +325,11 @@ async fn handle_invoice_update(
         None => return Ok(()),
     };
 
-    let user_result: Option<(Uuid,)> = sqlx::query_as(
-        "SELECT user_id FROM stripe_customers WHERE stripe_customer_id = $1",
-    )
-    .bind(&customer_id)
-    .fetch_optional(db)
-    .await?;
+    let user_result: Option<(Uuid,)> =
+        sqlx::query_as("SELECT user_id FROM stripe_customers WHERE stripe_customer_id = $1")
+            .bind(&customer_id)
+            .fetch_optional(db)
+            .await?;
 
     let user_id = match user_result {
         Some((id,)) => id,
@@ -378,8 +380,19 @@ async fn handle_invoice_update(
     .bind(subscription_id.map(|(id,)| id))
     .bind(&stripe_invoice_id)
     .bind(&invoice.number)
-    .bind(invoice.status.as_ref().map(|s| format!("{:?}", s).to_lowercase()))
-    .bind(invoice.currency.as_ref().map(|c| c.to_string()).unwrap_or_else(|| "eur".to_string()))
+    .bind(
+        invoice
+            .status
+            .as_ref()
+            .map(|s| format!("{:?}", s).to_lowercase()),
+    )
+    .bind(
+        invoice
+            .currency
+            .as_ref()
+            .map(|c| c.to_string())
+            .unwrap_or_else(|| "eur".to_string()),
+    )
     .bind(invoice.amount_due.unwrap_or(0))
     .bind(invoice.amount_paid.unwrap_or(0))
     .bind(invoice.amount_remaining.unwrap_or(0))
@@ -388,9 +401,21 @@ async fn handle_invoice_update(
     .bind(invoice.total.unwrap_or(0))
     .bind(&invoice.hosted_invoice_url)
     .bind(&invoice.invoice_pdf)
-    .bind(invoice.period_start.map(|ts| DateTime::from_timestamp(ts, 0)).flatten())
-    .bind(invoice.period_end.map(|ts| DateTime::from_timestamp(ts, 0)).flatten())
-    .bind(invoice.due_date.map(|ts| DateTime::from_timestamp(ts, 0)).flatten())
+    .bind(
+        invoice
+            .period_start
+            .and_then(|ts| DateTime::from_timestamp(ts, 0)),
+    )
+    .bind(
+        invoice
+            .period_end
+            .and_then(|ts| DateTime::from_timestamp(ts, 0)),
+    )
+    .bind(
+        invoice
+            .due_date
+            .and_then(|ts| DateTime::from_timestamp(ts, 0)),
+    )
     .execute(db)
     .await?;
 
@@ -398,10 +423,7 @@ async fn handle_invoice_update(
     Ok(())
 }
 
-async fn handle_invoice_paid(
-    db: &sqlx::PgPool,
-    invoice: &stripe::Invoice,
-) -> Result<(), ApiError> {
+async fn handle_invoice_paid(db: &sqlx::PgPool, invoice: &stripe::Invoice) -> Result<(), ApiError> {
     let stripe_invoice_id = invoice.id.to_string();
 
     // Update invoice with paid_at
@@ -438,9 +460,14 @@ async fn handle_invoice_payment_failed(
             stripe::Expandable::Object(s) => s.id.to_string(),
         };
 
-        let error_msg = invoice.last_finalization_error
+        let error_msg = invoice
+            .last_finalization_error
             .as_ref()
-            .map(|e| e.message.clone().unwrap_or_else(|| "Payment failed".to_string()))
+            .map(|e| {
+                e.message
+                    .clone()
+                    .unwrap_or_else(|| "Payment failed".to_string())
+            })
             .unwrap_or_else(|| "Payment failed".to_string());
 
         sqlx::query(
@@ -458,12 +485,11 @@ async fn handle_invoice_payment_failed(
         .await?;
 
         // Get user to update account status
-        let user_result: Option<(Uuid,)> = sqlx::query_as(
-            "SELECT user_id FROM subscriptions WHERE stripe_subscription_id = $1",
-        )
-        .bind(&sub_id)
-        .fetch_optional(db)
-        .await?;
+        let user_result: Option<(Uuid,)> =
+            sqlx::query_as("SELECT user_id FROM subscriptions WHERE stripe_subscription_id = $1")
+                .bind(&sub_id)
+                .fetch_optional(db)
+                .await?;
 
         if let Some((user_id,)) = user_result {
             // Set to grace_period if not already
@@ -494,10 +520,7 @@ async fn handle_invoice_payment_failed(
     Ok(())
 }
 
-async fn handle_payment_method_detached(
-    db: &sqlx::PgPool,
-    pm_id: &str,
-) -> Result<(), ApiError> {
+async fn handle_payment_method_detached(db: &sqlx::PgPool, pm_id: &str) -> Result<(), ApiError> {
     sqlx::query("DELETE FROM payment_methods WHERE stripe_payment_method_id = $1")
         .bind(pm_id)
         .execute(db)

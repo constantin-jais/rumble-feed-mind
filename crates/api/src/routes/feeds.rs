@@ -15,7 +15,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::extractors::auth::CurrentUser;
 use crate::state::AppState;
 
-use feedmind_core::feed::{Feed as FeedMeta, FeedFetcher, FeedItem};
+use feedmind_core::feed::{FeedFetcher, FeedItem};
 
 /// Create feed request
 #[derive(Debug, Deserialize, Validate)]
@@ -577,8 +577,7 @@ async fn update_feed(
     let category_filter_json = req
         .category_filter
         .as_ref()
-        .map(|cf| serde_json::to_value(cf).ok())
-        .flatten();
+        .and_then(|cf| serde_json::to_value(cf).ok());
 
     // Update feed
     let feed: FeedRow = sqlx::query_as(

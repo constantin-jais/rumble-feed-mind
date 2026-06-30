@@ -64,23 +64,31 @@ impl<'a> BillingService<'a> {
             "#,
         )
         .bind(user_id)
-        .bind(&stripe_customer.id.to_string())
+        .bind(stripe_customer.id.to_string())
         .bind(email)
         .bind(name)
         .fetch_one(self.db)
         .await?;
 
         // Log event
-        self.log_billing_event(user_id, "customer.created", None, serde_json::json!({
-            "stripe_customer_id": stripe_customer.id.to_string()
-        }))
+        self.log_billing_event(
+            user_id,
+            "customer.created",
+            None,
+            serde_json::json!({
+                "stripe_customer_id": stripe_customer.id.to_string()
+            }),
+        )
         .await?;
 
         Ok(customer)
     }
 
     /// Get Stripe customer by user ID
-    pub async fn get_stripe_customer_by_user(&self, user_id: Uuid) -> ApiResult<Option<StripeCustomer>> {
+    pub async fn get_stripe_customer_by_user(
+        &self,
+        user_id: Uuid,
+    ) -> ApiResult<Option<StripeCustomer>> {
         let customer = sqlx::query_as::<_, StripeCustomer>(
             "SELECT * FROM stripe_customers WHERE user_id = $1",
         )
@@ -123,7 +131,9 @@ impl<'a> BillingService<'a> {
         _payment_method_id: Option<String>,
     ) -> ApiResult<Subscription> {
         // Ensure customer exists
-        let customer = self.get_or_create_stripe_customer(user_id, email, name).await?;
+        let customer = self
+            .get_or_create_stripe_customer(user_id, email, name)
+            .await?;
 
         // Get price ID for plan/interval
         let price_id = self.get_price_id(plan, interval)?;
@@ -147,17 +157,24 @@ impl<'a> BillingService<'a> {
             .map_err(|e| ApiError::Internal(format!("Failed to create subscription: {}", e)))?;
 
         // Store subscription in database
-        let sub = self.store_subscription(&customer, &stripe_sub, plan, interval).await?;
+        let sub = self
+            .store_subscription(&customer, &stripe_sub, plan, interval)
+            .await?;
 
         // Update user tier
         self.update_user_tier(user_id, plan).await?;
 
         // Log event
-        self.log_billing_event(user_id, "subscription.created", Some(&stripe_sub.id.to_string()), serde_json::json!({
-            "plan": plan.as_str(),
-            "interval": format!("{:?}", interval),
-            "stripe_subscription_id": stripe_sub.id.to_string()
-        }))
+        self.log_billing_event(
+            user_id,
+            "subscription.created",
+            Some(stripe_sub.id.as_ref()),
+            serde_json::json!({
+                "plan": plan.as_str(),
+                "interval": format!("{:?}", interval),
+                "stripe_subscription_id": stripe_sub.id.to_string()
+            }),
+        )
         .await?;
 
         Ok(sub)
@@ -171,7 +188,9 @@ impl<'a> BillingService<'a> {
         new_interval: BillingInterval,
         _prorate: bool,
     ) -> ApiResult<Subscription> {
-        let sub = self.get_subscription(user_id).await?
+        let sub = self
+            .get_subscription(user_id)
+            .await?
             .ok_or_else(|| ApiError::NotFound("Subscription".to_string()))?;
 
         let price_id = self.get_price_id(new_plan, new_interval)?;
@@ -210,10 +229,15 @@ impl<'a> BillingService<'a> {
         self.update_user_tier(user_id, new_plan).await?;
 
         // Log event
-        self.log_billing_event(user_id, "subscription.updated", Some(&stripe_sub.id.to_string()), serde_json::json!({
-            "old_plan": sub.plan_name,
-            "new_plan": new_plan.as_str()
-        }))
+        self.log_billing_event(
+            user_id,
+            "subscription.updated",
+            Some(stripe_sub.id.as_ref()),
+            serde_json::json!({
+                "old_plan": sub.plan_name,
+                "new_plan": new_plan.as_str()
+            }),
+        )
         .await?;
 
         Ok(updated)
@@ -226,7 +250,9 @@ impl<'a> BillingService<'a> {
         reason: Option<String>,
         immediate: bool,
     ) -> ApiResult<Subscription> {
-        let sub = self.get_subscription(user_id).await?
+        let sub = self
+            .get_subscription(user_id)
+            .await?
             .ok_or_else(|| ApiError::NotFound("Subscription".to_string()))?;
 
         let sub_id = stripe::SubscriptionId::from_str(&sub.stripe_subscription_id)
@@ -289,11 +315,15 @@ impl<'a> BillingService<'a> {
 
     /// Reactivate a canceled subscription
     pub async fn reactivate_subscription(&self, user_id: Uuid) -> ApiResult<Subscription> {
-        let sub = self.get_subscription(user_id).await?
+        let sub = self
+            .get_subscription(user_id)
+            .await?
             .ok_or_else(|| ApiError::NotFound("Subscription".to_string()))?;
 
         if !sub.cancel_at_period_end {
-            return Err(ApiError::BadRequest("Subscription is not scheduled for cancellation".to_string()));
+            return Err(ApiError::BadRequest(
+                "Subscription is not scheduled for cancellation".to_string(),
+            ));
         }
 
         let sub_id = stripe::SubscriptionId::from_str(&sub.stripe_subscription_id)
@@ -321,8 +351,13 @@ impl<'a> BillingService<'a> {
         .await?;
 
         // Log event
-        self.log_billing_event(user_id, "subscription.reactivated", Some(&sub.stripe_subscription_id), serde_json::json!({}))
-            .await?;
+        self.log_billing_event(
+            user_id,
+            "subscription.reactivated",
+            Some(&sub.stripe_subscription_id),
+            serde_json::json!({}),
+        )
+        .await?;
 
         Ok(updated)
     }
@@ -393,7 +428,12 @@ impl<'a> BillingService<'a> {
         } else {
             // For free users, use calendar month
             let now = Utc::now();
-            let start = now.with_day(1).unwrap().date_naive().and_hms_opt(0, 0, 0).unwrap();
+            let start = now
+                .with_day(1)
+                .unwrap()
+                .date_naive()
+                .and_hms_opt(0, 0, 0)
+                .unwrap();
             let end = (start + chrono::Duration::days(32)).with_day(1).unwrap();
             (
                 DateTime::from_naive_utc_and_offset(start, Utc),
@@ -462,11 +502,14 @@ impl<'a> BillingService<'a> {
         .fetch_all(self.db)
         .await?;
 
-        Ok(history.into_iter().map(|u| UsageHistoryEntry {
-            date: u.date,
-            ai_tokens: u.ai_tokens,
-            api_calls: u.api_calls,
-        }).collect())
+        Ok(history
+            .into_iter()
+            .map(|u| UsageHistoryEntry {
+                date: u.date,
+                ai_tokens: u.ai_tokens,
+                api_calls: u.api_calls,
+            })
+            .collect())
     }
 
     // ========================================================================
@@ -493,14 +536,13 @@ impl<'a> BillingService<'a> {
 
     /// Get single invoice
     pub async fn get_invoice(&self, user_id: Uuid, invoice_id: Uuid) -> ApiResult<Invoice> {
-        let invoice = sqlx::query_as::<_, Invoice>(
-            "SELECT * FROM invoices WHERE id = $1 AND user_id = $2",
-        )
-        .bind(invoice_id)
-        .bind(user_id)
-        .fetch_optional(self.db)
-        .await?
-        .ok_or_else(|| ApiError::NotFound("Invoice".to_string()))?;
+        let invoice =
+            sqlx::query_as::<_, Invoice>("SELECT * FROM invoices WHERE id = $1 AND user_id = $2")
+                .bind(invoice_id)
+                .bind(user_id)
+                .fetch_optional(self.db)
+                .await?
+                .ok_or_else(|| ApiError::NotFound("Invoice".to_string()))?;
 
         Ok(invoice)
     }
@@ -528,7 +570,9 @@ impl<'a> BillingService<'a> {
         stripe_pm_id: &str,
         set_default: bool,
     ) -> ApiResult<PaymentMethod> {
-        let customer = self.get_stripe_customer_by_user(user_id).await?
+        let customer = self
+            .get_stripe_customer_by_user(user_id)
+            .await?
             .ok_or_else(|| ApiError::BadRequest("No Stripe customer found".to_string()))?;
 
         let pm_id = stripe::PaymentMethodId::from_str(stripe_pm_id)
@@ -541,7 +585,9 @@ impl<'a> BillingService<'a> {
         stripe::PaymentMethod::attach(
             self.stripe,
             &pm_id,
-            stripe::AttachPaymentMethod { customer: customer_id.clone() },
+            stripe::AttachPaymentMethod {
+                customer: customer_id.clone(),
+            },
         )
         .await
         .map_err(|e| ApiError::Internal(format!("Failed to attach payment method: {}", e)))?;
@@ -583,7 +629,9 @@ impl<'a> BillingService<'a> {
                 },
             )
             .await
-            .map_err(|e| ApiError::Internal(format!("Failed to set default payment method: {}", e)))?;
+            .map_err(|e| {
+                ApiError::Internal(format!("Failed to set default payment method: {}", e))
+            })?;
         }
 
         // Store in database
@@ -637,7 +685,11 @@ impl<'a> BillingService<'a> {
     }
 
     /// Set payment method as default
-    pub async fn set_default_payment_method(&self, user_id: Uuid, method_id: Uuid) -> ApiResult<PaymentMethod> {
+    pub async fn set_default_payment_method(
+        &self,
+        user_id: Uuid,
+        method_id: Uuid,
+    ) -> ApiResult<PaymentMethod> {
         let method = sqlx::query_as::<_, PaymentMethod>(
             "SELECT * FROM payment_methods WHERE id = $1 AND user_id = $2",
         )
@@ -647,7 +699,9 @@ impl<'a> BillingService<'a> {
         .await?
         .ok_or_else(|| ApiError::NotFound("Payment method".to_string()))?;
 
-        let customer = self.get_stripe_customer_by_user(user_id).await?
+        let customer = self
+            .get_stripe_customer_by_user(user_id)
+            .await?
             .ok_or_else(|| ApiError::BadRequest("No Stripe customer found".to_string()))?;
 
         let customer_id = stripe::CustomerId::from_str(&customer.stripe_customer_id)
@@ -697,9 +751,15 @@ impl<'a> BillingService<'a> {
         let price_id = match (plan, interval) {
             (PlanTier::Pro, BillingInterval::Month) => self.config.stripe_price_pro_monthly.clone(),
             (PlanTier::Pro, BillingInterval::Year) => self.config.stripe_price_pro_annual.clone(),
-            (PlanTier::Team, BillingInterval::Month) => self.config.stripe_price_team_monthly.clone(),
+            (PlanTier::Team, BillingInterval::Month) => {
+                self.config.stripe_price_team_monthly.clone()
+            }
             (PlanTier::Team, BillingInterval::Year) => self.config.stripe_price_team_annual.clone(),
-            (PlanTier::Free, _) => return Err(ApiError::BadRequest("Free plan has no subscription".to_string())),
+            (PlanTier::Free, _) => {
+                return Err(ApiError::BadRequest(
+                    "Free plan has no subscription".to_string(),
+                ))
+            }
         };
 
         price_id.ok_or_else(|| ApiError::Internal("Price ID not configured".to_string()))
@@ -713,7 +773,10 @@ impl<'a> BillingService<'a> {
         // If day > 28, normalize to 1st of next month
         if day > 28 {
             let next_month = if now.month() == 12 {
-                now.with_month(1).unwrap().with_year(now.year() + 1).unwrap()
+                now.with_month(1)
+                    .unwrap()
+                    .with_year(now.year() + 1)
+                    .unwrap()
             } else {
                 now.with_month(now.month() + 1).unwrap()
             };
@@ -742,12 +805,18 @@ impl<'a> BillingService<'a> {
             stripe::SubscriptionStatus::Unpaid => SubscriptionStatus::Unpaid,
         };
 
-        let price_id = stripe_sub.items.data.first()
+        let price_id = stripe_sub
+            .items
+            .data
+            .first()
             .and_then(|i| i.price.as_ref())
             .map(|p| p.id.to_string())
             .unwrap_or_default();
 
-        let product_id = stripe_sub.items.data.first()
+        let product_id = stripe_sub
+            .items
+            .data
+            .first()
             .and_then(|i| i.price.as_ref())
             .and_then(|p| p.product.as_ref())
             .map(|p| match p {
@@ -770,7 +839,7 @@ impl<'a> BillingService<'a> {
         )
         .bind(customer.user_id)
         .bind(customer.id)
-        .bind(&stripe_sub.id.to_string())
+        .bind(stripe_sub.id.to_string())
         .bind(&price_id)
         .bind(&product_id)
         .bind(plan.as_str())

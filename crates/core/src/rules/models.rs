@@ -99,7 +99,7 @@ impl Rule {
 
     /// Check if rule applies to a specific feed
     pub fn applies_to_feed(&self, feed_id: Uuid) -> bool {
-        self.feed_id.map_or(true, |id| id == feed_id)
+        self.feed_id.is_none_or(|id| id == feed_id)
     }
 }
 

@@ -15,9 +15,7 @@ pub struct PlansResponse {
 }
 
 /// List available plans
-pub async fn list_plans(
-    State(_state): State<AppState>,
-) -> ApiResult<Json<PlansResponse>> {
+pub async fn list_plans(State(_state): State<AppState>) -> ApiResult<Json<PlansResponse>> {
     let plans = vec![
         Plan {
             tier: PlanTier::Free,

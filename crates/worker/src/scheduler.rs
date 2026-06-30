@@ -181,8 +181,6 @@ async fn enqueue_webhook_cleanup(redis_url: &str) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_cron_expression_validity() {
         // These should parse without error

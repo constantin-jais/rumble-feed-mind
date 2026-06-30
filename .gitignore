@@ -6,7 +6,6 @@ _bmad
 
 # Rust
 target/
-Cargo.lock
 
 # Environment
 .env

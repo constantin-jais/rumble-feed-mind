@@ -7,6 +7,8 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use std::{future::Future, pin::Pin};
+
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -138,106 +140,106 @@ async fn import_opml(
     }))
 }
 
+type ImportOutlineResult = Result<(i64, i64, i64, Vec<ImportError>), ApiError>;
+type ImportOutlineFuture<'a> = Pin<Box<dyn Future<Output = ImportOutlineResult> + Send + 'a>>;
+
 /// Recursively import an outline (folder or feed)
 fn import_outline<'a>(
     tx: &'a mut sqlx::Transaction<'_, sqlx::Postgres>,
     user_id: Uuid,
     outline: &'a OpmlOutline,
     parent_folder_id: Option<Uuid>,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(i64, i64, i64, Vec<ImportError>), ApiError>> + Send + 'a>> {
+) -> ImportOutlineFuture<'a> {
     Box::pin(async move {
-    let mut feeds_imported = 0i64;
-    let mut feeds_skipped = 0i64;
-    let mut folders_created = 0i64;
-    let mut errors: Vec<ImportError> = Vec::new();
+        let mut feeds_imported = 0i64;
+        let mut feeds_skipped = 0i64;
+        let mut folders_created = 0i64;
+        let mut errors: Vec<ImportError> = Vec::new();
 
-    if outline.is_feed() {
-        // This is a feed - import it
-        let url = outline.xml_url.as_ref().unwrap();
+        if outline.is_feed() {
+            // This is a feed - import it
+            let url = outline.xml_url.as_ref().unwrap();
 
-        // Check if feed already exists
-        let exists: bool =
-            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM feeds WHERE user_id = $1 AND url = $2)")
-                .bind(user_id)
-                .bind(url)
-                .fetch_one(&mut **tx)
-                .await
-                .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
-
-        if exists {
-            feeds_skipped += 1;
-            return Ok((feeds_imported, feeds_skipped, folders_created, errors));
-        }
-
-        // Insert feed (without fetching - will be queued for fetch later)
-        let title = outline
-            .title
-            .as_ref()
-            .unwrap_or(&outline.text)
-            .to_string();
-
-        let result = sqlx::query(
-            r#"
-            INSERT INTO feeds (user_id, url, title, site_url, folder_id, priority)
-            VALUES ($1, $2, $3, $4, $5, 'warm')
-            "#,
-        )
-        .bind(user_id)
-        .bind(url)
-        .bind(&title)
-        .bind(&outline.html_url)
-        .bind(parent_folder_id)
-        .execute(&mut **tx)
-        .await;
-
-        match result {
-            Ok(_) => {
-                feeds_imported += 1;
-            }
-            Err(e) => {
-                errors.push(ImportError {
-                    url: url.clone(),
-                    reason: e.to_string(),
-                });
-            }
-        }
-    } else if !outline.children.is_empty() {
-        // This is a folder - create it and recurse
-        let folder_name = outline.text.clone();
-
-        // Check if folder already exists at this level
-        let existing_folder_id: Option<Uuid> = sqlx::query_scalar(
-            r#"
-            SELECT id FROM folders
-            WHERE user_id = $1 AND name = $2
-            AND (parent_id IS NOT DISTINCT FROM $3)
-            "#,
-        )
-        .bind(user_id)
-        .bind(&folder_name)
-        .bind(parent_folder_id)
-        .fetch_optional(&mut **tx)
-        .await
-        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
-
-        let folder_id = if let Some(id) = existing_folder_id {
-            id
-        } else {
-            // Create new folder
-            let next_position: i32 = sqlx::query_scalar(
-                r#"
-                SELECT COALESCE(MAX(position), -1) + 1
-                FROM folders
-                WHERE user_id = $1 AND (parent_id IS NOT DISTINCT FROM $2)
-                "#,
+            // Check if feed already exists
+            let exists: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM feeds WHERE user_id = $1 AND url = $2)",
             )
             .bind(user_id)
-            .bind(parent_folder_id)
+            .bind(url)
             .fetch_one(&mut **tx)
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
-            let new_id: Uuid = sqlx::query_scalar(
+            if exists {
+                feeds_skipped += 1;
+                return Ok((feeds_imported, feeds_skipped, folders_created, errors));
+            }
+
+            // Insert feed (without fetching - will be queued for fetch later)
+            let title = outline.title.as_ref().unwrap_or(&outline.text).to_string();
+
+            let result = sqlx::query(
+                r#"
+            INSERT INTO feeds (user_id, url, title, site_url, folder_id, priority)
+            VALUES ($1, $2, $3, $4, $5, 'warm')
+            "#,
+            )
+            .bind(user_id)
+            .bind(url)
+            .bind(&title)
+            .bind(&outline.html_url)
+            .bind(parent_folder_id)
+            .execute(&mut **tx)
+            .await;
+
+            match result {
+                Ok(_) => {
+                    feeds_imported += 1;
+                }
+                Err(e) => {
+                    errors.push(ImportError {
+                        url: url.clone(),
+                        reason: e.to_string(),
+                    });
+                }
+            }
+        } else if !outline.children.is_empty() {
+            // This is a folder - create it and recurse
+            let folder_name = outline.text.clone();
+
+            // Check if folder already exists at this level
+            let existing_folder_id: Option<Uuid> = sqlx::query_scalar(
+                r#"
+            SELECT id FROM folders
+            WHERE user_id = $1 AND name = $2
+            AND (parent_id IS NOT DISTINCT FROM $3)
+            "#,
+            )
+            .bind(user_id)
+            .bind(&folder_name)
+            .bind(parent_folder_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+
+            let folder_id = if let Some(id) = existing_folder_id {
+                id
+            } else {
+                // Create new folder
+                let next_position: i32 = sqlx::query_scalar(
+                    r#"
+                SELECT COALESCE(MAX(position), -1) + 1
+                FROM folders
+                WHERE user_id = $1 AND (parent_id IS NOT DISTINCT FROM $2)
+                "#,
+                )
+                .bind(user_id)
+                .bind(parent_folder_id)
+                .fetch_one(&mut **tx)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+
+                let new_id: Uuid = sqlx::query_scalar(
                 "INSERT INTO folders (user_id, name, parent_id, position) VALUES ($1, $2, $3, $4) RETURNING id",
             )
             .bind(user_id)
@@ -248,21 +250,22 @@ fn import_outline<'a>(
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to create folder: {}", e)))?;
 
-            folders_created += 1;
-            new_id
-        };
+                folders_created += 1;
+                new_id
+            };
 
-        // Recurse into children
-        for child in &outline.children {
-            let (fi, fs, fc, errs) = import_outline(tx, user_id, child, Some(folder_id)).await?;
-            feeds_imported += fi;
-            feeds_skipped += fs;
-            folders_created += fc;
-            errors.extend(errs);
+            // Recurse into children
+            for child in &outline.children {
+                let (fi, fs, fc, errs) =
+                    import_outline(tx, user_id, child, Some(folder_id)).await?;
+                feeds_imported += fi;
+                feeds_skipped += fs;
+                folders_created += fc;
+                errors.extend(errs);
+            }
         }
-    }
 
-    Ok((feeds_imported, feeds_skipped, folders_created, errors))
+        Ok((feeds_imported, feeds_skipped, folders_created, errors))
     })
 }
 
@@ -321,7 +324,8 @@ async fn export_opml(
 
     // Add feeds to their folders
     for feed in &feeds {
-        let outline = OpmlOutline::feed(feed.title.clone(), feed.url.clone(), feed.site_url.clone());
+        let outline =
+            OpmlOutline::feed(feed.title.clone(), feed.url.clone(), feed.site_url.clone());
 
         if let Some(folder_id) = feed.folder_id {
             if let Some(folder) = folder_map.get_mut(&folder_id) {
