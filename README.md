@@ -71,5 +71,6 @@ cd apps/web && npm run lint
 - `AGENTS.md` — doctrine locale pour agents et contributeurs.
 - `goals.toml` — suivi agentic-harness.
 - `docs/refactor-plan.md` — plan de refonte Rust-first.
+- `docs/launch-target.md` — cible lancement produit et release train.
 - `docs/adr/0001-rust-core-multiplatform.md` — décision initiale prudente.
 - `docs/adr/0002-rust-first-product-stack.md` — pivot stack option C.
