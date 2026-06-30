@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/domain",
     "crates/ingest",
+    "crates/rules",
     "crates/core",
     "crates/api",
     "crates/worker",
@@ -89,6 +90,8 @@ stripe = { package = "async-stripe", version = "0.39", features = ["runtime-toki
 
 # Internal crates
 feedmind-domain = { path = "crates/domain" }
+feedmind-ingest = { path = "crates/ingest" }
+feedmind-rules = { path = "crates/rules" }
 feedmind-core = { path = "crates/core" }
 
 [profile.release]
