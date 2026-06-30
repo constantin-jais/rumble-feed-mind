@@ -1000,6 +1000,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "feedmind-ingest"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "feed-rs",
+ "feedmind-domain",
+ "reqwest",
+ "thiserror 2.0.18",
+ "tracing",
+ "uuid 1.23.4",
+]
+
+[[package]]
 name = "feedmind-worker"
 version = "0.1.0"
 dependencies = [
