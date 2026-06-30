@@ -2,14 +2,16 @@
 
 ## Identité
 
-`rumble-feed-mind` est un lecteur de flux intelligent multi-plateforme. Le cœur produit doit rester en Rust : parsing RSS/Atom/JSON Feed, OPML, règles, crypto, synchronisation, file de jobs et invariants métier.
+`rumble-feed-mind` est un moteur personnel de veille souveraine, Rust-first, multi-plateforme. Il ingère des flux, normalise les articles, applique des règles explicables, prépare des décisions de lecture et distribue l'expérience sur CLI/API/web/desktop/mobile.
 
 ## Doctrine
 
-- **Rust at core** : toute règle métier réutilisable vit dans `crates/core` ou dans un crate Rust dédié.
-- **Adapters minces** : `api`, `worker`, `cli`, web/desktop/mobile ne portent pas la logique métier durable.
-- **Distribution multi-plateforme** : web/PWA d'abord, desktop via Tauri ensuite, mobile via client API ; UniFFI seulement si un vrai besoin offline natif apparaît.
-- **Souveraineté** : self-hostable, PostgreSQL/Redis, Clever Cloud comme cible EU, pas de dépendance obligatoire à un hyperscaler US.
+- **Rust-first product stack** : domaine, règles, sync, contrats IA, adapters et surfaces durables doivent tendre vers Rust.
+- **Next.js legacy** : `apps/web` reste une référence fonctionnelle de migration, pas la cible long terme.
+- **Adapters minces** : `api`, `worker`, `cli`, UI et shells de distribution ne portent pas la logique métier durable.
+- **Explicabilité obligatoire** : une règle ou décision de tri doit produire une raison et, si possible, une evidence.
+- **Event-minded** : préférer des événements métier rejouables (`FeedFetched`, `ArticleDiscovered`, `RuleEvaluated`) aux mutations opaques.
+- **Souveraineté** : self-hostable, PostgreSQL/Redis, SQLite local si offline, Clever Cloud comme cible EU, pas de dépendance obligatoire à un hyperscaler US.
 - **BYOK** : clés IA utilisateur chiffrées, jamais loggées, jamais commitées.
 - **Preuve > promesse** : chaque incrément de refonte doit laisser une commande de vérification reproductible.
 
@@ -17,19 +19,25 @@
 
 ```text
 crates/
-  core/      domaine pur : feeds, articles, règles, OPML, crypto, contrats IA
-  api/       adapter HTTP Axum + auth + pagination + enveloppes API
-  worker/    adapter jobs Redis/scheduler/fetch/evaluation
-  cli/       diagnostics, import/export, opérations locales
+  domain/   types purs et invariants transverses
+  ingest/   fetch, parse, normalize, dedup
+  rules/    règles, scoring, decisions, evidence
+  ai/       traits providers, BYOK contracts, prompts
+  sync/     event log, snapshots, import/export
+  storage/  ports de persistance + impls
+  api/      adapter HTTP Axum
+  worker/   adapter jobs Redis/scheduler/fetch/evaluation
+  cli/      diagnostics, import/export, opérations locales
 apps/
-  web/       client web/PWA
-  desktop/   cible future Tauri, shell fin autour du web/core via API locale si besoin
-  mobile/    cible future Expo ou client natif, sans logique métier dupliquée
+  web-rs/   cible UI Rust Leptos/WASM
+  desktop/  cible Tauri 2
+  mobile/   cible Tauri mobile/Rust-first à valider
+  web/      legacy Next.js, référence de migration
 ```
 
 ## Quality gates locaux
 
-À exécuter avant tout commit de refonte :
+À exécuter avant tout commit de refonte Rust :
 
 ```bash
 cargo fmt --all --check
@@ -39,7 +47,11 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 agentic-harness goals report --config goals.toml
 ```
 
-État actuel : `cargo check` passe, mais `clippy -D warnings` est un objectif de refonte, pas encore un invariant acquis.
+Pour le legacy web :
+
+```bash
+cd apps/web && npm run lint
+```
 
 ## Règles de modification
 
@@ -49,11 +61,14 @@ agentic-harness goals report --config goals.toml
 - Ne pas masquer une erreur par un `allow` global sans ADR ou commentaire local.
 - Garder `Cargo.lock` versionné pour la reproductibilité des applications.
 - Documenter toute décision structurante dans `docs/adr/`.
+- Toute nouvelle dépendance majeure doit être justifiée par licence, souveraineté, maintenance et alternative rejetée.
 
 ## Priorité de refonte
 
-1. Stabiliser le domaine `crates/core` sous tests.
-2. Réduire les warnings puis activer `clippy -D warnings` en CI.
-3. Découpler API/worker des détails métier.
-4. Ajouter smoke tests API/worker et scripts de release multi-target.
-5. Préparer les shells web/desktop/mobile sans dupliquer la logique.
+1. Extraire `crates/domain` sans changement fonctionnel.
+2. Faire consommer `domain` par le core existant.
+3. Extraire `ingest` et `rules` avec tests de non-régression.
+4. Modéliser `Decision`, `Evidence`, `Action` et les événements métier.
+5. Faire de la CLI le premier client complet du core.
+6. Préparer `apps/web-rs` seulement après stabilisation des contrats UI.
+7. Ajouter Tauri 2 après preuve web-rs/CLI/API.

@@ -1,50 +1,54 @@
 # rumble-feed-mind
 
-Lecteur de flux intelligent, Rust-core, multi-plateforme.
+Moteur personnel de veille souveraine, **Rust-first**, multi-plateforme.
 
 ## Intention
 
-`rumble-feed-mind` transforme les flux RSS/Atom/JSON Feed en veille exploitable : import OPML, lecture, règles de tri, enrichissement IA en BYOK et distribution sur plusieurs surfaces utilisateur.
+`rumble-feed-mind` transforme les flux RSS/Atom/JSON Feed en veille exploitable : import OPML, lecture, règles de tri, enrichissement IA en BYOK, explicabilité et distribution sur plusieurs surfaces utilisateur.
+
+Le projet ne vise pas seulement un lecteur RSS avec IA. Il vise un système de décision personnel : ingestion, normalisation, qualification, explication, synchronisation et export.
 
 Le produit appartient à la couche **Rumble** : il porte l'expérience de lecture et de veille. Il ne doit pas devenir l'ingestion générique, l'orchestrateur agentique, ni le registre d'artefacts.
 
-## Architecture
+## Cap stack
+
+Principe directeur : **Rust-first product stack**.
+
+- Les invariants métier vivent en Rust.
+- Les adapters sont minces.
+- Les surfaces utilisateur durables migrent vers Rust.
+- Next.js reste une référence transitoire, pas la cible long terme.
+
+## Architecture cible
 
 ```text
-crates/core    logique métier Rust : feeds, OPML, articles, règles, crypto
-crates/api     API Axum : auth, REST, enveloppes, accès PostgreSQL/Redis
-crates/worker  jobs async : fetch, rules, billing/dunning, planification
-crates/cli     diagnostics et opérations locales
-apps/web       frontend web/PWA
-migrations     schéma PostgreSQL
+crates/domain   types purs : Feed, Article, Rule, Decision, Opml, UserScope
+crates/ingest   fetch, parse, normalize, dedup
+crates/rules    règles déterministes, scoring, explications, evidence
+crates/ai       traits providers, BYOK contracts, prompts auditables
+crates/sync     event log, snapshots, import/export, offline-ready contracts
+crates/storage  ports de persistance + impl PostgreSQL/SQLite si besoin
+crates/api      adapter HTTP Axum
+crates/worker   adapter jobs Tokio/Redis
+crates/cli      diagnostics et opérations locales
+apps/web-rs     cible UI Rust Leptos/WASM
+apps/desktop    cible Tauri 2
+apps/mobile     cible Tauri mobile ou shell Rust-first à valider
+apps/web        legacy Next.js, référence de migration
+migrations      schéma PostgreSQL serveur
 ```
-
-Principe directeur : **Rust at core, adapters at edges**.
 
 ## Cibles de distribution
 
 | Cible | Statut | Rôle |
 | --- | --- | --- |
-| Web/PWA | existant à consolider | surface principale de lecture |
+| CLI Rust | priorité immédiate | prouver le core sans UI |
 | API self-hosted | existant à durcir | backend souverain PostgreSQL/Redis |
-| Worker | existant à durcir | fetch et traitements asynchrones |
-| CLI | squelette | import/export, diagnostics, admin local |
-| Desktop Tauri | cible | shell multi-OS sans logique métier dupliquée |
-| Mobile | cible | client mobile API-first ; offline natif à décider plus tard |
-
-## Démarrage local
-
-```bash
-cargo check
-cargo test --workspace
-cd apps/web && npm install && npm run lint
-```
-
-Services locaux :
-
-```bash
-docker compose up -d postgres redis
-```
+| Worker Rust | existant à durcir | fetch et traitements asynchrones |
+| Web Rust/Leptos | cible | surface web durable |
+| Desktop Tauri 2 | cible | app Linux/macOS/Windows |
+| Mobile Rust-first | cible expérimentale | distribution mobile sans dupliquer le métier |
+| Next.js | legacy | référence fonctionnelle pendant migration |
 
 ## Gates de refonte
 
@@ -56,11 +60,16 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 agentic-harness goals report --config goals.toml
 ```
 
-`cargo check` passe actuellement. Le passage de `clippy -D warnings` est un jalon de refonte : la base contient encore des API préparées mais non branchées.
+Frontend legacy :
+
+```bash
+cd apps/web && npm run lint
+```
 
 ## Documentation
 
 - `AGENTS.md` — doctrine locale pour agents et contributeurs.
 - `goals.toml` — suivi agentic-harness.
-- `docs/refactor-plan.md` — plan de refonte Rust-core/multi-plateforme.
-- `docs/adr/` — décisions structurantes.
+- `docs/refactor-plan.md` — plan de refonte Rust-first.
+- `docs/adr/0001-rust-core-multiplatform.md` — décision initiale prudente.
+- `docs/adr/0002-rust-first-product-stack.md` — pivot stack option C.

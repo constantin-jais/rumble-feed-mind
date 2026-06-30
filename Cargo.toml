@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/domain",
     "crates/core",
     "crates/api",
     "crates/worker",
@@ -86,6 +87,7 @@ tokio-cron-scheduler = "0.13"
 stripe = { package = "async-stripe", version = "0.39", features = ["runtime-tokio-hyper"] }
 
 # Internal crates
+feedmind-domain = { path = "crates/domain" }
 feedmind-core = { path = "crates/core" }
 
 [profile.release]

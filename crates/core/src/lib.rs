@@ -9,6 +9,7 @@
 
 pub mod article;
 pub mod crypto;
+pub mod domain;
 pub mod error;
 pub mod feed;
 pub mod opml;

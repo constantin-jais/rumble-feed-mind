@@ -971,6 +971,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "feed-rs",
+ "feedmind-domain",
  "hkdf",
  "quick-xml",
  "rand 0.8.6",
@@ -986,6 +987,16 @@ dependencies = [
  "tracing",
  "uuid 1.23.4",
  "validator",
+]
+
+[[package]]
+name = "feedmind-domain"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "sha2",
+ "uuid 1.23.4",
 ]
 
 [[package]]

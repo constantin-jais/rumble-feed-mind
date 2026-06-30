@@ -13,7 +13,7 @@ status = "done"
 
 [[phases.phase_0.sub_milestones]]
 id = "readme"
-name = "README racine Rust-core"
+name = "README racine"
 status = "done"
 
 [[phases.phase_0.sub_milestones]]
@@ -46,34 +46,68 @@ name = "Tests workspace verts"
 status = "done"
 
 [phases.phase_2]
-name = "Core domain stable"
+name = "Pivot Rust-first product stack"
 status = "in-progress"
 
 [[phases.phase_2.sub_milestones]]
-id = "ports"
-name = "Ports domaine/adapters identifiés"
+id = "adr-0002"
+name = "ADR pivot option C"
+status = "done"
+
+[[phases.phase_2.sub_milestones]]
+id = "doctrine-rust-first"
+name = "Doctrine Rust-first product stack"
+status = "done"
+
+[[phases.phase_2.sub_milestones]]
+id = "crate-split-plan"
+name = "Plan extraction domain/ingest/rules/sync"
+status = "done"
+
+[[phases.phase_2.sub_milestones]]
+id = "domain-crate"
+name = "Créer crates/domain sans changement fonctionnel"
 status = "pending"
 
 [[phases.phase_2.sub_milestones]]
-id = "core-coverage"
-name = "Couverture core prioritaire"
+id = "events-model"
+name = "Modèle événements + Decision/Evidence"
 status = "pending"
 
 [phases.phase_3]
-name = "Distribution multi-plateforme"
+name = "Core crates extraction"
 status = "pending"
 
 [[phases.phase_3.sub_milestones]]
-id = "web-pwa"
-name = "Web/PWA stabilisée"
+id = "domain"
+name = "Types purs extraits"
 status = "pending"
 
 [[phases.phase_3.sub_milestones]]
-id = "desktop-decision"
-name = "Décision Tauri documentée"
+id = "ingest"
+name = "Ingestion extraite"
 status = "pending"
 
 [[phases.phase_3.sub_milestones]]
+id = "rules"
+name = "Rules engine explicable"
+status = "pending"
+
+[phases.phase_4]
+name = "Rust UI et distribution"
+status = "pending"
+
+[[phases.phase_4.sub_milestones]]
+id = "web-rs"
+name = "apps/web-rs Leptos"
+status = "pending"
+
+[[phases.phase_4.sub_milestones]]
+id = "desktop-tauri"
+name = "apps/desktop Tauri 2"
+status = "pending"
+
+[[phases.phase_4.sub_milestones]]
 id = "release-matrix"
 name = "Matrix release Linux/macOS/Windows"
 status = "pending"
@@ -107,7 +141,14 @@ lower_is_better = true
 
 [[observability]]
 id = "core_tests"
-name = "Tests core"
+name = "Tests Rust workspace"
 value = 31
 target = 31
 lower_is_better = false
+
+[[observability]]
+id = "frontend_legacy_warnings"
+name = "Warnings lint Next legacy"
+value = 17
+target = 0
+lower_is_better = true

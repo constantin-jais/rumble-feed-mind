@@ -2,7 +2,11 @@
 
 ## Statut
 
-Acceptée.
+Supersédée par [ADR 0002 — Pivot stack Rust-first produit](0002-rust-first-product-stack.md).
+
+## Note
+
+Cette ADR documente la trajectoire prudente initiale. Elle est conservée pour l'historique, mais le cap actuel est l'option C : Rust-first produit, voir ADR 0002.
 
 ## Contexte
 

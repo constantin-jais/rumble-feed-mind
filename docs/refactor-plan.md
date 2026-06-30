@@ -1,92 +1,170 @@
-# Plan de refonte — Rust-core & multi-plateforme
+# Plan de refonte — Rust-first product stack
 
 ## Objectif
 
-Remettre `rumble-feed-mind` sur une trajectoire produit distribuable : un cœur Rust robuste, des adapters minces, des gates observables et des cibles web/desktop/mobile cohérentes.
+Pivoter `rumble-feed-mind` vers une stack produit Rust-first : le domaine, les règles, les contrats IA, la synchronisation, les adapters et les surfaces durables doivent converger vers Rust. Le legacy Next.js reste une référence de migration, pas une cible durable.
+
+## Vision challengée
+
+Mauvaise formulation : “lecteur RSS avec IA”.
+
+Formulation cible :
+
+> `rumble-feed-mind` est un moteur personnel de veille souveraine : il ingère, normalise, qualifie, explique et distribue l'information utile sur plusieurs plateformes.
+
+Conséquences :
+
+- Le produit central n'est pas l'UI.
+- Le produit central n'est pas l'API.
+- Le produit central n'est pas PostgreSQL.
+- Le produit central est le graphe d'information + décisions explicables + sync/export.
 
 ## Problèmes observés
 
-- Le workspace Rust compile, mais beaucoup de code préparatoire reste non branché.
-- `clippy --all-targets -D warnings` n'est pas encore atteignable sans nettoyage.
-- La distribution multi-plateforme n'est pas formalisée.
-- La doctrine agentic-harness/practice n'était pas déclarée dans le repo.
-- `Cargo.lock` était ignoré alors que le repo contient des binaires/applications.
+- Workspace Rust existant mais encore organisé autour d'un `core` monolithique.
+- Beaucoup de logique applicative reste couplée aux adapters API/worker.
+- UI durable encore en TypeScript/Next.js.
+- Distribution multi-plateforme pas encore matérialisée.
+- Pas encore de modèle d'événements métier rejouables.
 
 ## Architecture cible
 
 ```mermaid
 graph TD
-    Core[crates/core\nDomaine Rust]
-    API[crates/api\nHTTP Axum]
-    Worker[crates/worker\nJobs async]
-    CLI[crates/cli\nOps locales]
-    Web[apps/web\nWeb/PWA]
-    Desktop[apps/desktop\nTauri cible]
-    Mobile[apps/mobile\nMobile cible]
+    Domain[crates/domain\nTypes + invariants]
+    Ingest[crates/ingest\nFetch/parse/normalize]
+    Rules[crates/rules\nDecisions/evidence]
+    AI[crates/ai\nBYOK provider traits]
+    Sync[crates/sync\nEvents/snapshots]
+    Storage[crates/storage\nPorts + impls]
+    API[crates/api\nAxum adapter]
+    Worker[crates/worker\nJobs adapter]
+    CLI[crates/cli\nReference client]
+    WebRs[apps/web-rs\nLeptos/WASM]
+    Desktop[apps/desktop\nTauri 2]
+    Mobile[apps/mobile\nTauri mobile/Rust-first]
+    Legacy[apps/web\nNext legacy]
     DB[(PostgreSQL)]
     Redis[(Redis)]
+    SQLite[(SQLite local future)]
 
-    API --> Core
-    Worker --> Core
-    CLI --> Core
-    Web --> API
-    Desktop --> API
-    Mobile --> API
-    API --> DB
-    API --> Redis
-    Worker --> DB
+    Domain --> Ingest
+    Domain --> Rules
+    Domain --> Sync
+    Domain --> AI
+    Storage --> Domain
+    API --> Domain
+    API --> Storage
+    Worker --> Ingest
+    Worker --> Rules
+    Worker --> Storage
+    CLI --> Domain
+    CLI --> Ingest
+    CLI --> Rules
+    WebRs --> API
+    Desktop --> WebRs
+    Mobile --> WebRs
+    Legacy -. migration reference .-> WebRs
+    Storage --> DB
     Worker --> Redis
+    Sync --> SQLite
 ```
 
-## Phases
+## Chantiers
 
-### Phase 0 — Doctrine et reproductibilité
+### Chantier 1 — Crate split domaine
 
-- Ajouter `AGENTS.md` local.
-- Ajouter `goals.toml`.
-- Ajouter README racine.
-- Versionner `Cargo.lock`.
-- Supprimer les dev-dependencies cassées ou inutilisées.
+- Créer `crates/domain`.
+- Déplacer les types purs : feeds, articles, règles, OPML DTOs, decisions.
+- Faire dépendre l'ancien `crates/core` de `domain` pendant transition.
+- Aucun changement API visible.
 
-### Phase 1 — Qualité Rust minimale
+Acceptation : gates Rust vertes.
 
-- Nettoyer les imports inutilisés.
-- Catégoriser le dead code : API future documentée, code à brancher, code à supprimer.
-- Activer progressivement `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
-- Ajouter des tests unitaires autour de `core` avant tout déplacement métier.
+### Chantier 2 — Event model
 
-### Phase 2 — Core domain stable
+Modéliser les événements métier :
 
-- Stabiliser les modules `feed`, `opml`, `article`, `rules`, `crypto`.
-- Introduire des traits de ports si nécessaire : `FeedRepository`, `ArticleRepository`, `RuleRepository`, `AiProvider`.
-- Éviter que `api` ou `worker` réimplémentent des invariants.
+```text
+FeedAdded
+FeedFetched
+ArticleDiscovered
+ArticleNormalized
+RuleEvaluated
+DecisionExplained
+ArticleRead
+ArticleExported
+```
 
-### Phase 3 — Adapters et contrats
+Objectif : replay, audit, sync multi-device, offline futur.
 
-- Normaliser les réponses API `{ data, meta }`.
-- Rendre la pagination cursor-based effective.
-- Encapsuler Redis queues côté worker.
-- Ajouter smoke tests API + worker avec PostgreSQL/Redis.
+### Chantier 3 — Rules engine explicable
 
-### Phase 4 — Distribution
+Remplacer le modèle “regex match” par :
 
-- Web/PWA : stabiliser build, lint, variables publiques.
-- Desktop : ajouter Tauri seulement après stabilisation API/core.
-- Mobile : choisir Expo API-first ou client natif après validation des besoins offline.
-- Release : préparer matrix Linux/macOS/Windows pour CLI et desktop via `gear-cable` si pertinent.
+```rust
+RuleInput -> RuleDecision {
+    matched,
+    actions,
+    confidence,
+    explanation,
+    evidence,
+}
+```
+
+Les actions ne doivent pas être appliquées silencieusement.
+
+### Chantier 4 — CLI comme preuve du core
+
+La CLI doit prouver que le produit existe sans UI web :
+
+- importer OPML
+- fetch un flux
+- normaliser des articles
+- évaluer des règles
+- exporter un snapshot
+
+### Chantier 5 — Storage ports
+
+- Introduire traits `FeedStore`, `ArticleStore`, `RuleStore`, `EventStore`.
+- Impl PostgreSQL côté serveur.
+- Impl mémoire pour tests.
+- Impl SQLite seulement quand l'offline est cadré.
+
+### Chantier 6 — UI Rust
+
+- Extraire les contrats écran depuis Next.js.
+- Créer `apps/web-rs` Leptos/WASM.
+- Migrer d'abord les parcours critiques : liste feeds, liste articles, article detail, règles.
+- Garder Next.js comme oracle visuel/fonctionnel temporaire.
+
+### Chantier 7 — Distribution
+
+- Desktop : Tauri 2 après web-rs utilisable.
+- Mobile : Tauri mobile ou autre shell Rust-first après validation des contraintes UX/offline.
+- Release : matrix Linux/macOS/Windows, artefacts signés si possible.
 
 ## Non-objectifs immédiats
 
-- Pas de réécriture complète du frontend avant stabilisation du core.
-- Pas d'UniFFI tant que l'offline natif n'est pas prouvé nécessaire.
+- Pas de big bang UI.
+- Pas de suppression de Next.js avant couverture des parcours critiques.
+- Pas de Tauri avant contrats UI Rust stabilisés.
 - Pas de nouveau provider IA tant que BYOK/crypto/audit ne sont pas durcis.
 - Pas d'hébergement US obligatoire.
+
+## Harness practices
+
+- `goals.toml` suit la phase active.
+- Toute décision structurante passe par ADR.
+- Chaque incrément fournit une preuve : commandes, tests, diff ciblé.
+- Les gates Rust restent non négociables.
+- Les exceptions temporaires (`allow(dead_code)` par exemple) doivent être locales, commentées et supprimables.
 
 ## Critères d'acceptation de la refonte initiale
 
 - `cargo fmt --all --check` vert.
 - `cargo check` vert.
-- `cargo test --workspace` vert ou écarts documentés.
+- `cargo test --workspace` vert.
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings` vert.
-- README + AGENTS + goals à jour.
-- ADR écrite pour tout choix de distribution structurant.
+- `agentic-harness goals report --config goals.toml` lisible.
+- ADR du pivot Rust-first acceptée.
