@@ -30,5 +30,16 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Test
         run: cargo test --workspace --all-features
+      - name: Curated export demo contract
+        run: |
+          set -euo pipefail
+          cargo run -p feedmind-cli -- demo-curate \
+            --opml examples/demo.opml \
+            --article examples/demo-article.json \
+            --rule examples/demo-rule.json \
+            --output out/curated.json
+          diff -u examples/expected-curated-export.json out/curated.json
+          python3 -m json.tool out/curated.json >/dev/null
+          cargo run -p feedmind-cli -- validate-curated-export --file out/curated.json
       - name: Documentation
         run: cargo doc --workspace --all-features --no-deps

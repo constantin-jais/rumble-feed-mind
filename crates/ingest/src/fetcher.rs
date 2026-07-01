@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use feedmind_domain::feed::{Feed, FeedItem};
 use reqwest::Client;
+use sha2::{Digest, Sha256};
 use tracing::{info, warn};
 
 use crate::error::{Error, Result};
@@ -59,7 +60,7 @@ impl FeedFetcher {
 
     /// Fetch and parse a feed from URL.
     pub async fn fetch(&self, url: &str) -> Result<(Feed, Vec<FeedItem>)> {
-        info!(url = %url, "Fetching feed");
+        info!(url_hash = %safe_hash(url), "Fetching feed");
 
         let response = self.client
             .get(url)
@@ -69,7 +70,7 @@ impl FeedFetcher {
 
         let status = response.status();
         if !status.is_success() {
-            warn!(url = %url, status = %status, "Feed fetch failed");
+            warn!(url_hash = %safe_hash(url), status = %status, "Feed fetch failed");
             return Err(Error::HttpStatus(status.as_u16()));
         }
 
@@ -114,6 +115,15 @@ impl FeedFetcher {
         let response = request.send().await?;
         Ok(response.status() != reqwest::StatusCode::NOT_MODIFIED)
     }
+}
+
+fn safe_hash(value: &str) -> String {
+    let digest = Sha256::digest(value.as_bytes());
+    digest
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()[..16]
+        .to_string()
 }
 
 impl Default for FeedFetcher {

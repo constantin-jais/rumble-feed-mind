@@ -9,6 +9,7 @@ use axum::{
 };
 use chrono::DateTime;
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use stripe::{Event, EventObject, EventType, Webhook};
 use uuid::Uuid;
 
@@ -58,19 +59,19 @@ pub async fn handle_webhook(
     // Check idempotency - skip if already processed
     let already_processed = check_idempotency(state.db(), event.id.as_ref()).await;
     if already_processed {
-        tracing::debug!(event_id = %event.id, "Webhook event already processed, skipping");
+        tracing::debug!(event_hash = %safe_ref(event.id.as_ref()), "Webhook event already processed, skipping");
         return StatusCode::OK;
     }
 
     // Process the event
     if let Err(e) = process_event(&state, &event).await {
-        tracing::error!(event_id = %event.id, error = %e, "Failed to process webhook event");
+        tracing::error!(event_hash = %safe_ref(event.id.as_ref()), error = %e, "Failed to process webhook event");
         // Don't return error to Stripe - we'll retry via our own logic if needed
     }
 
     // Mark as processed
     if let Err(e) = mark_processed(state.db(), event.id.as_ref(), &event.type_.to_string()).await {
-        tracing::error!(event_id = %event.id, error = %e, "Failed to mark webhook as processed");
+        tracing::error!(event_hash = %safe_ref(event.id.as_ref()), error = %e, "Failed to mark webhook as processed");
     }
 
     StatusCode::OK
@@ -267,7 +268,7 @@ async fn handle_subscription_update(
         }
     }
 
-    tracing::info!(subscription_id = %stripe_sub_id, status = ?status, "Updated subscription from webhook");
+    tracing::info!(subscription_hash = %safe_ref(&stripe_sub_id), status = ?status, "Updated subscription from webhook");
     Ok(())
 }
 
@@ -306,7 +307,7 @@ async fn handle_subscription_deleted(
             .execute(db)
             .await?;
 
-        tracing::info!(user_id = %user_id, subscription_id = %stripe_sub_id, "Subscription deleted, user downgraded to free");
+        tracing::info!(user_id = %user_id, subscription_hash = %safe_ref(&stripe_sub_id), "Subscription deleted, user downgraded to free");
     }
 
     Ok(())
@@ -334,7 +335,7 @@ async fn handle_invoice_update(
     let user_id = match user_result {
         Some((id,)) => id,
         None => {
-            tracing::warn!(customer_id = %customer_id, "Invoice webhook: customer not found");
+            tracing::warn!(customer_hash = %safe_ref(&customer_id), "Invoice webhook: customer not found");
             return Ok(());
         }
     };
@@ -419,7 +420,7 @@ async fn handle_invoice_update(
     .execute(db)
     .await?;
 
-    tracing::debug!(invoice_id = %stripe_invoice_id, "Updated invoice from webhook");
+    tracing::debug!(invoice_hash = %safe_ref(&stripe_invoice_id), "Updated invoice from webhook");
     Ok(())
 }
 
@@ -443,7 +444,7 @@ async fn handle_invoice_paid(db: &sqlx::PgPool, invoice: &stripe::Invoice) -> Re
     .execute(db)
     .await?;
 
-    tracing::info!(invoice_id = %stripe_invoice_id, "Invoice paid");
+    tracing::info!(invoice_hash = %safe_ref(&stripe_invoice_id), "Invoice paid");
     Ok(())
 }
 
@@ -516,7 +517,7 @@ async fn handle_invoice_payment_failed(
         }
     }
 
-    tracing::warn!(invoice_id = %stripe_invoice_id, "Invoice payment failed");
+    tracing::warn!(invoice_hash = %safe_ref(&stripe_invoice_id), "Invoice payment failed");
     Ok(())
 }
 
@@ -526,7 +527,7 @@ async fn handle_payment_method_detached(db: &sqlx::PgPool, pm_id: &str) -> Resul
         .execute(db)
         .await?;
 
-    tracing::debug!(payment_method_id = %pm_id, "Payment method detached");
+    tracing::debug!(payment_method_hash = %safe_ref(pm_id), "Payment method detached");
     Ok(())
 }
 
@@ -558,6 +559,15 @@ async fn handle_customer_updated(
     .execute(db)
     .await?;
 
-    tracing::debug!(customer_id = %customer_id, "Customer updated");
+    tracing::debug!(customer_hash = %safe_ref(&customer_id), "Customer updated");
     Ok(())
+}
+
+fn safe_ref(value: &str) -> String {
+    let digest = Sha256::digest(value.as_bytes());
+    digest
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()[..16]
+        .to_string()
 }

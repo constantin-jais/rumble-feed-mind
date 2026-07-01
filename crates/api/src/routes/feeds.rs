@@ -1,5 +1,7 @@
 //! Feed management routes
 
+use sha2::{Digest, Sha256};
+
 use axum::{
     extract::{Path, Query, State},
     routing::{get, post},
@@ -431,7 +433,11 @@ async fn create_feed(
         .await;
 
         if let Err(e) = result {
-            tracing::warn!("Failed to insert article {}: {}", item.title, e);
+            tracing::warn!(
+                article_hash = %safe_hash(&item.title),
+                error = %e,
+                "Failed to insert article"
+            );
         }
     }
 
@@ -439,9 +445,9 @@ async fn create_feed(
     if let Ok(deleted) = enforce_article_retention(&mut tx, feed.id, user.id).await {
         if deleted > 0 {
             tracing::info!(
-                "Deleted {} old articles from feed {} to enforce retention limit",
                 deleted,
-                feed.id
+                feed_id = %feed.id,
+                "Deleted old articles to enforce retention limit"
             );
         }
     }
@@ -664,6 +670,15 @@ async fn refresh_feed(
         .map_err(|e| ApiError::Internal(format!("Failed to queue job: {}", e)))?;
 
     Ok(Json(serde_json::json!({ "data": { "queued": true } })))
+}
+
+fn safe_hash(value: &str) -> String {
+    let digest = Sha256::digest(value.as_bytes());
+    digest
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()[..16]
+        .to_string()
 }
 
 /// Build feed routes

@@ -2,6 +2,7 @@
 
 [![Rust CI](https://github.com/constantin-jais/rumble-feed-mind/actions/workflows/rust-ci.yml/badge.svg?branch=main)](https://github.com/constantin-jais/rumble-feed-mind/actions/workflows/rust-ci.yml)
 [![Security](https://github.com/constantin-jais/rumble-feed-mind/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/constantin-jais/rumble-feed-mind/actions/workflows/security.yml)
+[![Contracts](https://github.com/constantin-jais/rumble-feed-mind/actions/workflows/contracts.yml/badge.svg?branch=main)](https://github.com/constantin-jais/rumble-feed-mind/actions/workflows/contracts.yml)
 [![Release](https://github.com/constantin-jais/rumble-feed-mind/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/constantin-jais/rumble-feed-mind/actions/workflows/release.yml)
 
 Moteur personnel de veille souveraine, **Rust-first**, multi-plateforme.
@@ -29,13 +30,13 @@ This repository is part of the forge dogfooding loop: the ecosystem should use i
 
 Current visible evidence:
 
-- Rust CI, security, and release workflows exercise the feed pipeline surface;
+- Rust CI, security, contracts, and release workflows exercise the feed pipeline surface;
 - contracts and fixtures frame ingest, curation, BYOK, and export behavior;
 - README maturity notes keep advisories and runtime hardening limits explicit.
 
 Expected next evidence:
 
-- publish example curated-item exports and classification logs;
+- harden CuratedItemExport beyond the fixture workflow and complete adversarial log review;
 - make fail-closed feed cases visible as fixtures.
 
 Dogfooding claims should stay backed by visible commands, fixtures, CI workflows, generated reports, or linked docs.
@@ -54,6 +55,7 @@ Ce qui fonctionne localement sans base de données ni secret :
 
 - parser un fichier OPML et afficher un résumé JSON ;
 - évaluer une règle regex sur un article JSON ;
+- générer un `CuratedItemExport` déterministe à partir des fixtures locales ;
 - afficher l'aide CLI ;
 - lancer les tests Rust du workspace ;
 - produire des artefacts CLI tag/manual via le workflow release.
@@ -69,6 +71,13 @@ cargo run -p feedmind-cli -- opml-summary --file examples/demo.opml
 cargo run -p feedmind-cli -- evaluate-rule \
   --article examples/demo-article.json \
   --rule examples/demo-rule.json
+cargo run -p feedmind-cli -- demo-curate \
+  --opml examples/demo.opml \
+  --article examples/demo-article.json \
+  --rule examples/demo-rule.json \
+  --output out/curated.json
+cargo run -p feedmind-cli -- validate-curated-export --file out/curated.json
+diff -u examples/expected-curated-export.json out/curated.json
 ```
 
 ## Example output
@@ -95,11 +104,19 @@ Résumé OPML :
 
 ## Target demo
 
-La démo produit cible n'est pas encore complète : `OPML → fetch feeds → rules → curated export JSON`. Aujourd'hui, seules les briques locales sans base (`opml-summary`, `fetch-feed`, `evaluate-rule`) et les contrats d'export sont prouvés séparément.
+La première démo produit locale est maintenant prouvable sans base ni réseau : `OPML fixture → Article fixture → Rule fixture → CuratedItemExport JSON`. Une variante réseau optionnelle existe pour démonstration manuelle, mais elle n'est pas utilisée en CI afin de garder les gates déterministes :
+
+```bash
+cargo run -p feedmind-cli -- demo-curate-live \
+  --feed-url https://blog.rust-lang.org/feed.xml \
+  --rule examples/demo-rule.json \
+  --output out/live-curated.json
+cargo run -p feedmind-cli -- validate-curated-export --file out/live-curated.json
+```
 
 ## Not scale-ready yet
 
-- Pas encore de workflow utilisateur complet OPML → export curaté en une commande.
+- Le workflow CI `demo-curate` utilise des fixtures ; `demo-curate-live` dépend du réseau et reste une démonstration manuelle.
 - Pas d'observabilité ni de runbook opérationnel.
 - Pas de déploiement self-hosted documenté de bout en bout.
 - Pas de contraintes multi-utilisateur/load testées.
@@ -108,7 +125,7 @@ La démo produit cible n'est pas encore complète : `OPML → fetch feeds → ru
 
 ## Next product milestone
 
-Fournir une démo locale unique `examples/demo.opml` + fixtures article/règle → `out/curated.json`, sans base de données et avec sortie lisible par un humain.
+Brancher la sélection live sur une politique produit plus riche : choix humain, classification logs, stockage local optionnel, puis intégration Wrench/Gear.
 
 ## Intention
 

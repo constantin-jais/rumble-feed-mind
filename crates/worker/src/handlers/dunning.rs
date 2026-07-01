@@ -8,6 +8,7 @@
 
 use chrono::Utc;
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -268,7 +269,7 @@ async fn queue_dunning_email(
     // For now, we just log it
     tracing::info!(
         user_id = %sub.user_id,
-        email = %sub.email,
+        email_hash = %safe_hash(&sub.email),
         action = ?action,
         "Would queue dunning email"
     );
@@ -344,6 +345,15 @@ async fn suspend_account(db: &PgPool, user_id: Uuid) -> Result<(), sqlx::Error> 
 }
 
 /// Clean up webhook events older than 30 days
+fn safe_hash(value: &str) -> String {
+    let digest = Sha256::digest(value.as_bytes());
+    digest
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()[..16]
+        .to_string()
+}
+
 pub async fn cleanup_webhook_events(db: &PgPool) -> Result<u64, sqlx::Error> {
     let result =
         sqlx::query("DELETE FROM webhook_events WHERE created_at < NOW() - INTERVAL '30 days'")

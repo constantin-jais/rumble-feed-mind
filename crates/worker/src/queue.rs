@@ -3,6 +3,7 @@
 use feedmind_ingest::FeedFetcher;
 use redis::aio::ConnectionManager;
 use regex::Regex;
+use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{FromRow, PgPool};
 use tracing::{error, info, warn};
@@ -459,7 +460,7 @@ impl QueueConsumer {
         to: &str,
         template: &crate::jobs::EmailTemplate,
     ) -> anyhow::Result<()> {
-        info!(to, ?template, "Sending email - not implemented");
+        info!(recipient_hash = %safe_hash(to), template = ?template, "Sending email - not implemented");
         Ok(())
     }
 
@@ -547,6 +548,15 @@ impl QueueConsumer {
         info!(deleted, "Old webhook events cleaned up");
         Ok(())
     }
+}
+
+fn safe_hash(value: &str) -> String {
+    let digest = Sha256::digest(value.as_bytes());
+    digest
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()[..16]
+        .to_string()
 }
 
 /// Push a job to the queue

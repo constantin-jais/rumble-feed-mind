@@ -61,7 +61,7 @@ WARN. Current feed ingestion is product-local (`crates/ingest`). It may remain l
 
 ### CuratedItemExport
 
-PASS for spec smoke, WARN for runtime. Shared draft exists at `specs/shared/contracts/curated-item-export.v0.1.md`, is instantiated in FeedMind specs, and has deterministic fixture/smoke at `specs/rumble-feed-mind/verify_curated_item_export.py`. Missing: product runtime tests and real Wrench/Gear integration.
+PASS for spec smoke and local runtime fixture. Shared draft exists at `specs/shared/contracts/curated-item-export.v0.1.md`, is instantiated in FeedMind specs, has deterministic fixture/smoke at `specs/rumble-feed-mind/verify_curated_item_export.py`, and the CLI now exposes `demo-curate` with a golden `examples/expected-curated-export.json`. `demo-curate-live` exists for manual network checks, while CI remains fixture-based for determinism. Missing: enforced API/worker log classification and real Wrench/Gear integration.
 
 ### PII/secrets in logs
 
@@ -87,6 +87,8 @@ PASS with waiver. `cargo deny check licenses` and `cargo deny check advisories` 
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace
+cargo run -p feedmind-cli -- demo-curate --opml examples/demo.opml --article examples/demo-article.json --rule examples/demo-rule.json --output out/curated.json
+cargo run -p feedmind-cli -- validate-curated-export --file out/curated.json
 cargo test --workspace --no-run
 cargo deny check licenses
 cargo deny check advisories
@@ -97,6 +99,7 @@ Results:
 - `cargo fmt --all --check`: PASS
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`: PASS
 - `cargo test --workspace`: PASS
+- `demo-curate` + `validate-curated-export` + golden diff: PASS
 - `cargo test --workspace --no-run`: PASS
 - `cargo deny check licenses`: PASS after adding `deny.toml` and making `feedmind-cli` inherit workspace MIT license
 - `cargo deny check advisories`: PASS with ADR 0005 temporary advisory waivers

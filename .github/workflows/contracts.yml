@@ -1,0 +1,41 @@
+name: contracts
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  curated-item-export:
+    name: CuratedItemExport contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - name: Fixture JSON syntax
+        run: |
+          set -euo pipefail
+          python3 -m json.tool examples/demo-article.json >/dev/null
+          python3 -m json.tool examples/demo-rule.json >/dev/null
+          python3 -m json.tool examples/expected-curated-export.json >/dev/null
+          python3 -m json.tool schemas/curated-item-export.v0.1.schema.json >/dev/null
+      - name: Build deterministic CuratedItemExport
+        run: |
+          set -euo pipefail
+          cargo run -p feedmind-cli -- demo-curate \
+            --opml examples/demo.opml \
+            --article examples/demo-article.json \
+            --rule examples/demo-rule.json \
+            --output out/curated.json
+      - name: Validate contract invariants
+        run: cargo run -p feedmind-cli -- validate-curated-export --file out/curated.json
+      - name: Golden output must not drift
+        run: diff -u examples/expected-curated-export.json out/curated.json
