@@ -144,7 +144,7 @@ Initially, I used `create_signal()` (deprecated in 0.7). Leptos 0.7 prefers the 
 
 ### Comparison to Dioxus
 
-- **Dioxus**: Also early-stage (0.5.x), but the core API is more stable. `rsx!` macro has remained consistent. Dioxus ecosystem (Dioxus Fullstack) is more mature for web+server integration.
+- **Dioxus**: the ecosystem's Dioxus spike (rumble-lm) used **0.7**, the same generation as this Leptos 0.7 — both are pre-1.0. Correction to an earlier draft of this doc that referenced 0.5.x: the head-to-head is 0.7 vs 0.7. Neither spike ran the other framework, so cross-framework rows are informed comparison, not measured benchmark.
 - **Leptos**: More opinionated on SSR (it's built-in, not bolted-on). Cleaner separation of concerns for server/client code.
 
 **Verdict**: Leptos tooling is **solid but immature**. Build & cargo integration = excellent. API stability = good enough for a new project, but not a migration target for large existing codebases.
@@ -256,7 +256,7 @@ This component renders identically on the server (Rust binary) and in the client
 
 ## Comparative Matrix: Leptos vs Dioxus
 
-| Criterion                | Leptos 0.7                 | Dioxus 0.5                     | Winner                                          |
+| Criterion                | Leptos 0.7                 | Dioxus 0.7                     | Winner                                          |
 | ------------------------ | -------------------------- | ------------------------------ | ----------------------------------------------- |
 | **Component Ergonomics** | view! macro, declarative   | rsx! macro, declarative        | **TIE** (both clean, Leptos stricter ownership) |
 | **Reactivity Model**     | Fine-grained (signals)     | Component-level (hooks)        | **LEPTOS** (optimal for perf, harder to learn)  |
