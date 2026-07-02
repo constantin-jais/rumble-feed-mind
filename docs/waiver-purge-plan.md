@@ -13,6 +13,8 @@ Five RustSec advisories are currently waived in `deny.toml`. This plan identifie
 | RUSTSEC-2024-0384 | instant → async-stripe path dependency  | Timing or platform issue in instant crate     | Resolved by async-stripe upgrade or explicit instant patch                                                 | pending | 2026-08-15 |
 | RUSTSEC-2024-0436 | paste → validator, or UI dep chain      | Macro expansion or compile-time vulnerability | Upgrade validator to v0.20+ (if available) or isolate behind optional feature flag                         | pending | 2026-08-30 |
 | RUSTSEC-2026-0173 | proc-macro-error2 → UI/validator derive | Procedural macro safety issue                 | Upgrade validator or replace with alternative validation library; isolate UI behind feature gate if needed | pending | 2026-08-30 |
+| RUSTSEC-2026-0194 | quick-xml 0.37 → feed-rs 2.3 | NsReader unbounded allocation (quick-xml #970) | Bump feed-rs as soon as a release depends on quick-xml >=0.41; no upstream fix released as of 2026-07-02 | pending | 2026-09-30 |
+| RUSTSEC-2026-0195 | quick-xml 0.37 → feed-rs 2.3 | Same dependency tree as 0194 | Resolved together with RUSTSEC-2026-0194 via the feed-rs bump | pending | 2026-09-30 |
 
 ## Detailed Resolution Plan
 
