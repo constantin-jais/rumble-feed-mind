@@ -57,7 +57,7 @@ PASS with constraints. PostgreSQL and Redis are self-hostable and compatible wit
 
 ### Feed ingestion
 
-WARN. Current feed ingestion is product-local (`crates/ingest`). It may remain local for MVP only if `CuratedItemExport` is product-owned and no other product consumes feed parsing. If reused by Note/LM/COS, extraction should become Wrench Loader capability.
+WARN. Current feed ingestion is product-local (`crates/ingest`). It may remain local for MVP only if `CuratedItemExport` is product-owned and no other product consumes feed parsing. If reused by Note/LM/COS, extraction should become Gear Loader capability.
 
 ### CuratedItemExport
 

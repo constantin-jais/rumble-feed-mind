@@ -10,7 +10,7 @@ Accepted temporary waiver. Expires: **2026-09-30**.
 
 | Advisory | Path | Reason for temporary waiver | Current impact | Removal plan |
 | --- | --- | --- | --- | --- |
-| `RUSTSEC-2025-0057` | `fxhash` via `scraper` | Feed parsing/extraction path; replacement requires ingestion dependency evaluation. | Local parsing path; no trusted multi-tenant runtime claimed. | Evaluate replacing `scraper` or moving reusable extraction pressure to Wrench Loader. |
+| `RUSTSEC-2025-0057` | `fxhash` via `scraper` | Feed parsing/extraction path; replacement requires ingestion dependency evaluation. | Local parsing path; no trusted multi-tenant runtime claimed. | Evaluate replacing `scraper` or moving reusable extraction pressure to Gear Loader. |
 | `RUSTSEC-2026-0174` | `http-types` via `async-stripe` | Stripe is being isolated as optional adapter; removal/feature isolation pending. | Payment adapter is optional and not part of the no-secret quickstart. | Isolate or remove `async-stripe` from default/core builds. |
 | `RUSTSEC-2024-0384` | `instant` via `async-stripe` path | Same Stripe isolation path. | Same optional Stripe path. | Isolate or remove `async-stripe` from default/core builds. |
 | `RUSTSEC-2024-0436` | `paste` via UI dependencies | UI dependency stack is migration/target evaluation; no new product UI authorized yet. | UI target is not claimed usable. | Upgrade or replace UI dependency stack before product UI expansion. |

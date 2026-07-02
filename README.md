@@ -125,7 +125,7 @@ cargo run -p feedmind-cli -- validate-curated-export --file out/live-curated.jso
 
 ## Next product milestone
 
-Brancher la sélection live sur une politique produit plus riche : choix humain, classification logs, stockage local optionnel, puis intégration Wrench/Gear.
+Brancher la sélection live sur une politique produit plus riche : choix humain, classification logs, stockage local optionnel, puis intégration Portal/Wrench/Gear.
 
 ## Intention
 
@@ -133,15 +133,16 @@ Brancher la sélection live sur une politique produit plus riche : choix humain,
 
 Le projet ne vise pas seulement un lecteur RSS. Il explore un système de décision personnel : ingestion, normalisation, qualification, explication, synchronisation et export, livré par incréments vérifiables.
 
-Le produit appartient à la couche **Rumble** : il porte l'expérience de lecture et de veille. Il ne doit pas devenir l'ingestion générique, l'orchestrateur agentique, ni le registre d'artefacts.
+Le produit appartient à la couche **Rumble** : il porte l'expérience de lecture et de veille. Il ne doit pas devenir l'ingestion générique (`gear-loader`), la plateforme client partagée (Portal), l'orchestrateur agentique, ni le registre d'artefacts.
 
 ## Cap stack
 
-Principe directeur : **Rust-first product stack**.
+Principe directeur : **Rust-first product stack + Portal client platform**.
 
 - Les invariants métier vivent en Rust.
 - Les adapters sont minces.
-- Les surfaces utilisateur durables migrent vers Rust.
+- Les surfaces utilisateur durables consomment Portal pour les tokens, l'accessibilité, l'i18n UI et les shells web/natifs.
+- Dioxus/PWA est la voie rapide par défaut si elle gagne les spikes produit ; SwiftUI/Compose restent des voies natives first-class quand le besoin est prouvé.
 - Next.js reste une référence transitoire, pas la cible long terme.
 
 ## Architecture cible

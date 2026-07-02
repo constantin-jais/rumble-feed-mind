@@ -6,7 +6,7 @@
 
 ## Doctrine
 
-- **Rust-first product stack** : domaine, règles, sync, contrats IA, adapters et surfaces durables doivent tendre vers Rust.
+- **Rust-first product stack + Portal** : domaine, règles, sync, contrats IA et adapters doivent tendre vers Rust ; les surfaces durables consomment Portal pour tokens, accessibilité, i18n UI et shells web/natifs.
 - **Next.js legacy** : `apps/web` reste une référence fonctionnelle de migration, pas la cible long terme.
 - **Adapters minces** : `api`, `worker`, `cli`, UI et shells de distribution ne portent pas la logique métier durable.
 - **Explicabilité obligatoire** : une règle ou décision de tri doit produire une raison et, si possible, une evidence.
@@ -29,9 +29,9 @@ crates/
   worker/   adapter jobs Redis/scheduler/fetch/evaluation
   cli/      diagnostics, import/export, opérations locales
 apps/
-  web-rs/   cible UI Rust Leptos/WASM
+  web-rs/   cible UI Rust/WASM consommant Portal
   desktop/  cible Tauri 2
-  mobile/   cible Tauri mobile/Rust-first à valider
+  mobile/   cible SwiftUI/Compose via Portal ou Tauri mobile selon preuve produit
   web/      legacy Next.js, référence de migration
 ```
 
@@ -70,5 +70,5 @@ cd apps/web && npm run lint
 3. Extraire `ingest` et `rules` avec tests de non-régression.
 4. Modéliser `Decision`, `Evidence`, `Action` et les événements métier.
 5. Faire de la CLI le premier client complet du core.
-6. Préparer `apps/web-rs` seulement après stabilisation des contrats UI.
+6. Préparer `apps/web-rs` seulement après stabilisation des contrats UI Portal.
 7. Ajouter Tauri 2 après preuve web-rs/CLI/API.
