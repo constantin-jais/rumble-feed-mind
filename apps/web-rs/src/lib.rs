@@ -3,6 +3,8 @@
 //! This crate is the durable Rust-first web surface. The existing Next.js app
 //! remains a legacy reference until this UI covers the critical launch flows.
 
+pub mod spike;
+
 use feedmind_domain::FeedType;
 use leptos::prelude::*;
 
