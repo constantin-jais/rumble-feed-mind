@@ -12,6 +12,8 @@ ignore = [
   "RUSTSEC-2024-0384", # instant via async-stripe path
   "RUSTSEC-2024-0436", # paste via UI dependencies
   "RUSTSEC-2026-0173", # proc-macro-error2 via UI/validator dependencies
+  "RUSTSEC-2026-0194", # quick-xml NsReader via feed-rs 2.3 (no upstream fix released yet)
+  "RUSTSEC-2026-0195", # quick-xml via feed-rs 2.3 (same tree, pending feed-rs bump)
 ]
 
 [licenses]

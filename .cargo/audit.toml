@@ -10,4 +10,6 @@ ignore = [
     "RUSTSEC-2026-0173", # proc-macro-error2 via UI/validator dependencies
     "RUSTSEC-2023-0071", # rsa via sqlx-mysql; no RSA private-key decryption boundary in current Postgres-first runtime
     "RUSTSEC-2026-0097", # rand 0.7 via async-stripe/http-types; track with async-stripe replacement/upgrade
+    "RUSTSEC-2026-0194", # quick-xml NsReader via feed-rs 2.3; no upstream fix released (feed-rs pins quick-xml 0.37)
+    "RUSTSEC-2026-0195", # quick-xml via feed-rs 2.3; same tree as 0194, pending feed-rs bump
 ]
