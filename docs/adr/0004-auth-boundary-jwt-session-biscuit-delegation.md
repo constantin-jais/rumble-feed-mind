@@ -6,7 +6,7 @@ Accepted as a readiness boundary; implementation enforcement pending.
 
 ## Context
 
-The active FeedMind repo currently uses JWT for product session tokens. The ecosystem shared authorization direction is Biscuit for delegated rights across Rumble/Bolt/Wrench/Gear boundaries.
+The active FeedMind repo currently uses JWT for product session tokens. The ecosystem shared authorization direction is Biscuit for delegated rights across Rumble/Portal/Bolt/Wrench/Gear boundaries.
 
 FeedMind needs both local product sessions and safe export/harness delegation. Reusing JWT for delegation would duplicate security-sensitive logic and weaken attenuation/revocation semantics.
 
