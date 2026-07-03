@@ -11,6 +11,11 @@ use tracing::{error, info, warn};
 use crate::config::WorkerConfig;
 use crate::jobs::{Job, JobType};
 
+fn sha256_tag(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    format!("sha256:{}", digest.iter().map(|byte| format!("{byte:02x}")).collect::<String>())
+}
+
 /// Queue consumer for processing background jobs
 pub struct QueueConsumer {
     redis: ConnectionManager,
@@ -439,18 +444,18 @@ impl QueueConsumer {
 
     /// Export user data (GDPR)
     async fn process_export_user_data(&self, user_id: uuid::Uuid) -> anyhow::Result<()> {
-        info!(%user_id, "Exporting user data - not implemented");
+        info!(user_id_hash = %sha256_tag(user_id.to_string().as_bytes()), "Exporting user data - not implemented");
         Ok(())
     }
 
     /// Delete user data (GDPR)
     async fn process_delete_user_data(&self, user_id: uuid::Uuid) -> anyhow::Result<()> {
-        info!(%user_id, "Deleting user data");
+        info!(user_id_hash = %sha256_tag(user_id.to_string().as_bytes()), "Deleting user data");
         sqlx::query("DELETE FROM users WHERE id = $1")
             .bind(user_id)
             .execute(&self.db)
             .await?;
-        info!(%user_id, "User data deleted");
+        info!(user_id_hash = %sha256_tag(user_id.to_string().as_bytes()), "User data deleted");
         Ok(())
     }
 
@@ -495,7 +500,7 @@ impl QueueConsumer {
 
     /// Sync usage records to Stripe for metered billing
     async fn process_sync_usage(&self, user_id: uuid::Uuid) -> anyhow::Result<()> {
-        info!(%user_id, "Syncing usage to Stripe");
+        info!(user_id_hash = %sha256_tag(user_id.to_string().as_bytes()), "Syncing usage to Stripe");
 
         // Get pending usage records for this user
         let usage_records: Vec<(uuid::Uuid, String, i64)> = sqlx::query_as(
@@ -511,7 +516,7 @@ impl QueueConsumer {
         .await?;
 
         if usage_records.is_empty() {
-            info!(%user_id, "No pending usage to sync");
+            info!(user_id_hash = %sha256_tag(user_id.to_string().as_bytes()), "No pending usage to sync");
             return Ok(());
         }
 

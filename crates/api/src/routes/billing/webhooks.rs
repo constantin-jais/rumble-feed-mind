@@ -17,6 +17,11 @@ use super::models::*;
 use crate::error::ApiError;
 use crate::state::AppState;
 
+fn sha256_tag(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    format!("sha256:{}", digest.iter().map(|byte| format!("{byte:02x}")).collect::<String>())
+}
+
 /// Handle Stripe webhook
 pub async fn handle_webhook(
     State(state): State<AppState>,
@@ -307,7 +312,7 @@ async fn handle_subscription_deleted(
             .execute(db)
             .await?;
 
-        tracing::info!(user_id = %user_id, subscription_hash = %safe_ref(&stripe_sub_id), "Subscription deleted, user downgraded to free");
+        tracing::info!(user_id_hash = %sha256_tag(user_id.to_string().as_bytes()), subscription_hash = %safe_ref(&stripe_sub_id), "Subscription deleted, user downgraded to free");
     }
 
     Ok(())
