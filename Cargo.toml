@@ -75,7 +75,7 @@ chrono = { version = "0.4", features = ["serde"] }
 argon2 = "0.5"
 
 # JWT
-jsonwebtoken = "9.3"
+jsonwebtoken = "10.3"
 
 # Encryption (for API keys)
 aes-gcm = "0.10"
