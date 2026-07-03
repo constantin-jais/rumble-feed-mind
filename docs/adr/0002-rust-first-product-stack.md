@@ -10,6 +10,8 @@ L'écosystème Rumble converge vers une règle simple : les produits interactifs
 
 `rumble-feed-mind` avait une trajectoire historique web/mobile orientée TypeScript. Cette trajectoire reste utile comme référence fonctionnelle, mais elle ne doit pas devenir la destination durable du produit.
 
+**Observation 2026-07:** L'évaluation du spike Leptos 0.7 (docs/spikes/leptos-web-shell.md) a été complétée et démontre la viabilité de Leptos pour SSR+WASM. Cependant, la convergence de l'écosystème (DA-1 via ecosystem/specs/shared/adrs/0032-web-shell-dioxus-ratified.md, 2026-07-03) ratifie Dioxus 0.7.9 comme la cible UI durable pour tous les produits Rumble. Le spike reste archivé dans l'historique git et dans docs/spikes/ à titre de référence.
+
 ## Décision
 
 `rumble-feed-mind` adopte la trajectoire commune des Rumble interactifs :
@@ -25,15 +27,15 @@ L'écosystème Rumble converge vers une règle simple : les produits interactifs
 
 ## Stack cible
 
-| Couche | Choix | Raison |
-| --- | --- | --- |
-| Domaine | Rust crates pures (`domain`, `ingest`, `rules`, puis `ai`, `sync`, `storage`) | testabilité, portabilité, déterminisme |
-| API | Axum + Tokio | existant, robuste, self-hostable |
-| Jobs | Tokio worker + Redis Streams | existant, scalable, souverain si self-hosté |
-| DB serveur | PostgreSQL + SQLx | existant, requêtes typées |
-| Local cache futur | SQLite + SQLx | offline desktop/mobile possible |
-| UI interactive | Dioxus | convergence Rumble, Rust-first, multi-target |
-| Release | gear-cable à évaluer | artefacts reproductibles et distribution souveraine |
+| Couche            | Choix                                                                         | Raison                                              |
+| ----------------- | ----------------------------------------------------------------------------- | --------------------------------------------------- |
+| Domaine           | Rust crates pures (`domain`, `ingest`, `rules`, puis `ai`, `sync`, `storage`) | testabilité, portabilité, déterminisme              |
+| API               | Axum + Tokio                                                                  | existant, robuste, self-hostable                    |
+| Jobs              | Tokio worker + Redis Streams                                                  | existant, scalable, souverain si self-hosté         |
+| DB serveur        | PostgreSQL + SQLx                                                             | existant, requêtes typées                           |
+| Local cache futur | SQLite + SQLx                                                                 | offline desktop/mobile possible                     |
+| UI interactive    | Dioxus                                                                        | convergence Rumble, Rust-first, multi-target        |
+| Release           | gear-cable à évaluer                                                          | artefacts reproductibles et distribution souveraine |
 
 ## Conséquences
 
