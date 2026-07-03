@@ -49,3 +49,20 @@ jobs:
       - uses: taiki-e/install-action@5626e41434f03ab3022d9685405c0645c879f441 # cargo-audit
       - name: RustSec audit
         run: cargo audit
+
+  web-security:
+    name: Web security gates
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Install locked npm dependencies
+        run: npm ci
+      - name: npm audit
+        run: npm audit --audit-level=low
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
