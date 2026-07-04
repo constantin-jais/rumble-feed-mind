@@ -157,7 +157,6 @@ crates/storage  ports de persistance + impl PostgreSQL/SQLite si besoin
 crates/api      adapter HTTP Axum
 crates/worker   adapter jobs Tokio/Redis
 crates/cli      diagnostics et opérations locales
-apps/web-rs     cible UI Rust Leptos/WASM
 apps/desktop    cible Tauri 2
 apps/mobile     cible Tauri mobile ou shell Rust-first à valider
 apps/web        legacy Next.js, référence de migration
@@ -166,15 +165,15 @@ migrations      schéma PostgreSQL serveur
 
 ## Cibles de distribution
 
-| Cible | Statut | Rôle |
-| --- | --- | --- |
-| CLI Rust | priorité immédiate | prouver le core sans UI |
-| API self-hosted | existant à durcir | backend souverain PostgreSQL/Redis |
-| Worker Rust | existant à durcir | fetch et traitements asynchrones |
-| Web Rust/Leptos | cible | surface web durable |
-| Desktop Tauri 2 | cible | app Linux/macOS/Windows |
+| Cible             | Statut              | Rôle                                         |
+| ----------------- | ------------------- | -------------------------------------------- |
+| CLI Rust          | priorité immédiate  | prouver le core sans UI                      |
+| API self-hosted   | existant à durcir   | backend souverain PostgreSQL/Redis           |
+| Worker Rust       | existant à durcir   | fetch et traitements asynchrones             |
+| Web Rust/Dioxus   | cible               | surface web durable (Dioxus 0.7.9, ADR 0002) |
+| Desktop Tauri 2   | cible               | app Linux/macOS/Windows                      |
 | Mobile Rust-first | cible expérimentale | distribution mobile sans dupliquer le métier |
-| Next.js | legacy | référence fonctionnelle pendant migration |
+| Next.js           | legacy              | référence fonctionnelle pendant migration    |
 
 ## Gates de refonte
 
