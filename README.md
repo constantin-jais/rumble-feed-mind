@@ -1,6 +1,6 @@
 # rumble-feed-mind
 
-**Couche** : Rumble
+**Outil** : Rumble
 **Rôle** : pipeline de veille, curation de flux et exports explicables
 **deployment_class** : product-linkable
 **Maturité** : dojo — CLI/API preuves ; waivers sécurité à purger avant 2026-09-30
@@ -29,10 +29,9 @@ Réduit le bruit d’une veille en parsant des abonnements, appliquant des règl
 
 `rumble-feed-mind` explore un workflow de veille personnel : charger des abonnements, inspecter des articles, appliquer des règles explicables, puis préparer des exports auditables. Le besoin utilisateur est simple : réduire le bruit d'une veille sans confier ses lectures, ses règles ou ses clés à une plateforme fermée.
 
-
 ## Dogfooding
 
-This repository is part of the forge dogfooding loop: the ecosystem should use its own tools to make specs, maturity, contracts, releases, and product documentation observable.
+This repository is part of the Daidalos dogfooding loop: the ecosystem should use its own tools to make specs, maturity, contracts, releases, and product documentation observable.
 
 Current visible evidence:
 
@@ -139,7 +138,7 @@ Brancher la sélection live sur une politique produit plus riche : choix humain,
 
 Le projet ne vise pas seulement un lecteur RSS. Il explore un système de décision personnel : ingestion, normalisation, qualification, explication, synchronisation et export, livré par incréments vérifiables.
 
-Le produit appartient à la couche **Rumble** : il porte l'expérience de lecture et de veille. Il ne doit pas devenir l'ingestion générique (`gear-loader`), la plateforme client partagée (Portal), l'orchestrateur agentique, ni le registre d'artefacts.
+Le produit relève de l'outil **Rumble** : il porte l'expérience de lecture et de veille. Il ne doit pas devenir l'ingestion générique (`gear-loader`), la plateforme client partagée (Portal), l'orchestrateur agentique, ni le registre d'artefacts.
 
 ## Cap stack
 
