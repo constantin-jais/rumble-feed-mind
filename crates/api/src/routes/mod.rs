@@ -2,6 +2,7 @@
 
 pub mod articles;
 pub mod auth;
+#[cfg(feature = "stripe")]
 pub mod billing;
 pub mod categories;
 pub mod feeds;
