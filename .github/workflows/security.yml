@@ -39,8 +39,10 @@ jobs:
       - name: Log privacy smoke
         run: |
           set -euo pipefail
-          if rg -n 'email\s*=\s*%|info!\(to,|customer_id\s*=\s*%|invoice_id\s*=\s*%|payment_method_id\s*=\s*%|subscription_id\s*=\s*%|event_id\s*=\s*%|url\s*=\s*%url|Failed to insert article \{\}' crates/api/src crates/worker/src crates/ingest/src crates/cli/src/main.rs; then
-            echo "::error::potential raw PII/payment/feed data in logs"
+          # Detect raw PII/payment/feed data in logs across all workspace crates.
+          # Pattern: structured field assignment with % display (e.g., user_id = %user_id, email = %email) or format macro with PII.
+          if rg -n 'user_id\s*=\s*%|email\s*=\s*%|info!\(to,|customer_id\s*=\s*%|invoice_id\s*=\s*%|payment_method_id\s*=\s*%|subscription_id\s*=\s*%|event_id\s*=\s*%|url\s*=\s*%url|Failed to insert article \{\}' crates/api/src crates/worker/src crates/ingest/src crates/cli/src; then
+            echo "::error::potential raw PII/payment/feed data in logs (user_id, email, customer_id, etc.)"
             exit 1
           fi
       - uses: EmbarkStudios/cargo-deny-action@bb137d7af7e4fb67e5f82a49c4fce4fad40782fe # v2
