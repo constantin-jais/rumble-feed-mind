@@ -1,32 +1,37 @@
 # rumble-feed-mind
 
+**Outil** : Rumble
+**Rôle** : pipeline de veille, curation de flux et exports explicables
+**deployment_class** : product-linkable
+**Maturité** : dojo — CLI/API preuves ; waivers sécurité à purger avant 2026-09-30
+**Place dans la chaîne DoD** : consomme flux et règles utilisateur ; produit `CuratedItemExport` et handoffs auditables pour Bolt/Gear.
+**Doctrine** : produit de veille ; ne pas dupliquer le substrat d’ingestion Gear ni une mémoire durable.
+**Souveraineté** : licences MIT/Apache/MPL compatibles ; pas d’AGPL/SSPL dans la chaîne versionnée.
+
+## Ce que ça fait
+
+Réduit le bruit d’une veille en parsant des abonnements, appliquant des règles et générant des exports vérifiables. Le cœur Rust/fixtures existe ; le workflow utilisateur complet et les dettes advisories restent à durcir.
+
+## Où ça se branche
+
+- Amont : OPML/RSS/Atom/JSON Feed, règles utilisateur, futures sorties [gear-loader](https://github.com/constantin-jais/gear-loader).
+- Aval : `CuratedItemExport`, [bolt-cos-matic](https://github.com/constantin-jais/bolt-cos-matic), [gear-memory](https://github.com/constantin-jais/gear-memory) si les items deviennent SourceRef.
+- Contrats : `curated-item-export.v0.1`, BYOK policy dans [ecosystem/specs/shared/contracts](https://github.com/constantin-jais/constantin-jais/tree/main/ecosystem/specs/shared/contracts).
+
 [![Rust CI](https://github.com/constantin-jais/rumble-feed-mind/actions/workflows/rust-ci.yml/badge.svg?branch=main)](https://github.com/constantin-jais/rumble-feed-mind/actions/workflows/rust-ci.yml)
 [![Security](https://github.com/constantin-jais/rumble-feed-mind/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/constantin-jais/rumble-feed-mind/actions/workflows/security.yml)
 [![Contracts](https://github.com/constantin-jais/rumble-feed-mind/actions/workflows/contracts.yml/badge.svg?branch=main)](https://github.com/constantin-jais/rumble-feed-mind/actions/workflows/contracts.yml)
 [![Release](https://github.com/constantin-jais/rumble-feed-mind/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/constantin-jais/rumble-feed-mind/actions/workflows/release.yml)
 
-Moteur personnel de veille souveraine, **Rust-first**, multi-plateforme.
+---
 
 ## What it does
 
 `rumble-feed-mind` explore un workflow de veille personnel : charger des abonnements, inspecter des articles, appliquer des règles explicables, puis préparer des exports auditables. Le besoin utilisateur est simple : réduire le bruit d'une veille sans confier ses lectures, ses règles ou ses clés à une plateforme fermée.
 
-## Stack role
-
-- **Layer :** Rumble — Product.
-- **Role :** pipeline produit de veille et curation de flux.
-- **Mission :** transformer des flux RSS/Atom/JSON Feed en veille explicable, exportable et réutilisable.
-- **Maturity :** `dojo`.
-- **Scale-ready :** no — la preuve Rust/API existe, mais le workflow utilisateur complet, les logs classifiés et les waivers d'advisories restent à durcir.
-- **Current increment :** P0 contrats + P1 preuve Rust/API.
-- **Learning value :** veille, curation, règles déterministes, OPML/feed smokes, export/handoff contracts.
-- **Next quality step :** tests runtime `CuratedItemExport`, classification logs, retrait des waivers advisories.
-
-Voir le cockpit écosystème : [`constantin-jais/ecosystem/status.md`](https://github.com/constantin-jais/constantin-jais/blob/main/ecosystem/status.md).
-
 ## Dogfooding
 
-This repository is part of the forge dogfooding loop: the ecosystem should use its own tools to make specs, maturity, contracts, releases, and product documentation observable.
+This repository is part of the Daidalos dogfooding loop: the ecosystem should use its own tools to make specs, maturity, contracts, releases, and product documentation observable.
 
 Current visible evidence:
 
@@ -133,7 +138,7 @@ Brancher la sélection live sur une politique produit plus riche : choix humain,
 
 Le projet ne vise pas seulement un lecteur RSS. Il explore un système de décision personnel : ingestion, normalisation, qualification, explication, synchronisation et export, livré par incréments vérifiables.
 
-Le produit appartient à la couche **Rumble** : il porte l'expérience de lecture et de veille. Il ne doit pas devenir l'ingestion générique (`gear-loader`), la plateforme client partagée (Portal), l'orchestrateur agentique, ni le registre d'artefacts.
+Le produit relève de l'outil **Rumble** : il porte l'expérience de lecture et de veille. Il ne doit pas devenir l'ingestion générique (`gear-loader`), la plateforme client partagée (Portal), l'orchestrateur agentique, ni le registre d'artefacts.
 
 ## Cap stack
 
@@ -157,7 +162,6 @@ crates/storage  ports de persistance + impl PostgreSQL/SQLite si besoin
 crates/api      adapter HTTP Axum
 crates/worker   adapter jobs Tokio/Redis
 crates/cli      diagnostics et opérations locales
-apps/web-rs     cible UI Rust Leptos/WASM
 apps/desktop    cible Tauri 2
 apps/mobile     cible Tauri mobile ou shell Rust-first à valider
 apps/web        legacy Next.js, référence de migration
@@ -166,15 +170,15 @@ migrations      schéma PostgreSQL serveur
 
 ## Cibles de distribution
 
-| Cible | Statut | Rôle |
-| --- | --- | --- |
-| CLI Rust | priorité immédiate | prouver le core sans UI |
-| API self-hosted | existant à durcir | backend souverain PostgreSQL/Redis |
-| Worker Rust | existant à durcir | fetch et traitements asynchrones |
-| Web Rust/Leptos | cible | surface web durable |
-| Desktop Tauri 2 | cible | app Linux/macOS/Windows |
+| Cible             | Statut              | Rôle                                         |
+| ----------------- | ------------------- | -------------------------------------------- |
+| CLI Rust          | priorité immédiate  | prouver le core sans UI                      |
+| API self-hosted   | existant à durcir   | backend souverain PostgreSQL/Redis           |
+| Worker Rust       | existant à durcir   | fetch et traitements asynchrones             |
+| Web Rust/Dioxus   | cible               | surface web durable (Dioxus 0.7.9, ADR 0002) |
+| Desktop Tauri 2   | cible               | app Linux/macOS/Windows                      |
 | Mobile Rust-first | cible expérimentale | distribution mobile sans dupliquer le métier |
-| Next.js | legacy | référence fonctionnelle pendant migration |
+| Next.js           | legacy              | référence fonctionnelle pendant migration    |
 
 ## Gates de refonte
 

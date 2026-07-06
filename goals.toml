@@ -119,7 +119,7 @@ status = "done"
 
 [[phases.phase_4.sub_milestones]]
 id = "web-rs"
-name = "apps/web-rs Leptos"
+name = "apps/web-rs Leptos spike (retired — evidence in docs/spikes/, Dioxus is the durable target per ADR 0002)"
 status = "done"
 
 [[phases.phase_4.sub_milestones]]

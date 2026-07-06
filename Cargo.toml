@@ -12,7 +12,6 @@ members = [
     "crates/api",
     "crates/worker",
     "crates/cli",
-    "apps/web-rs",
 ]
 
 [workspace.package]
