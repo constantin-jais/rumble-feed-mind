@@ -11,7 +11,13 @@ use uuid::Uuid;
 
 fn sha256_tag(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
-    format!("sha256:{}", digest.iter().map(|byte| format!("{byte:02x}")).collect::<String>())
+    format!(
+        "sha256:{}",
+        digest
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    )
 }
 
 /// Record an API call for usage tracking
