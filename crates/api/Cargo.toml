@@ -66,5 +66,9 @@ regex = { workspace = true }
 # HTTP client (for feed discovery)
 reqwest = { workspace = true }
 
-# Stripe payments
-stripe = { workspace = true }
+# Stripe payments (optional)
+stripe = { package = "async-stripe", version = "0.39", features = ["runtime-tokio-hyper"], optional = true }
+
+[features]
+default = []
+stripe = ["dep:stripe"]
