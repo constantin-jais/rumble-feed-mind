@@ -29,7 +29,6 @@ crates/
   worker/   adapter jobs Redis/scheduler/fetch/evaluation
   cli/      diagnostics, import/export, opérations locales
 apps/
-  web-rs/   cible UI Rust/WASM consommant Portal
   desktop/  cible Tauri 2
   mobile/   cible SwiftUI/Compose via Portal ou Tauri mobile selon preuve produit
   web/      legacy Next.js, référence de migration
@@ -70,5 +69,5 @@ cd apps/web && npm run lint
 3. Extraire `ingest` et `rules` avec tests de non-régression.
 4. Modéliser `Decision`, `Evidence`, `Action` et les événements métier.
 5. Faire de la CLI le premier client complet du core.
-6. Préparer `apps/web-rs` seulement après stabilisation des contrats UI Portal.
-7. Ajouter Tauri 2 après preuve web-rs/CLI/API.
+6. Préparer le shell web **Dioxus** (ADR 0002 / ecosystem ADR 0032) seulement après stabilisation des contrats UI Portal ; le spike Leptos `apps/web-rs` a été retiré (évaluation conservée dans `docs/spikes/leptos-web-shell.md`).
+7. Ajouter Tauri 2 après preuve du shell web Dioxus/CLI/API.
