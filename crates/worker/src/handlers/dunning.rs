@@ -12,6 +12,17 @@ use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+fn sha256_tag(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    format!(
+        "sha256:{}",
+        digest
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    )
+}
+
 /// Dunning configuration
 pub struct DunningConfig {
     /// Days before downgrading to free (grace period)
@@ -268,7 +279,7 @@ async fn queue_dunning_email(
     // In a real implementation, this would queue an email job
     // For now, we just log it
     tracing::info!(
-        user_id = %sub.user_id,
+        user_id_hash = %sha256_tag(sub.user_id.to_string().as_bytes()),
         email_hash = %safe_hash(&sub.email),
         action = ?action,
         "Would queue dunning email"
@@ -321,7 +332,7 @@ async fn downgrade_to_free(
     .execute(db)
     .await?;
 
-    tracing::info!(user_id = %user_id, previous_plan = %previous_plan, "User downgraded to free tier");
+    tracing::info!(user_id_hash = %sha256_tag(user_id.to_string().as_bytes()), previous_plan = %previous_plan, "User downgraded to free tier");
     Ok(())
 }
 
@@ -340,7 +351,7 @@ async fn suspend_account(db: &PgPool, user_id: Uuid) -> Result<(), sqlx::Error> 
     .execute(db)
     .await?;
 
-    tracing::warn!(user_id = %user_id, "User account suspended due to non-payment");
+    tracing::warn!(user_id_hash = %sha256_tag(user_id.to_string().as_bytes()), "User account suspended due to non-payment");
     Ok(())
 }
 

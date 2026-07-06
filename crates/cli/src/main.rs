@@ -951,7 +951,7 @@ async fn import_opml(
 
     // Get or create user
     let user_id = get_or_create_user(pool, email, password).await?;
-    info!("Using user ID: {}", user_id);
+    info!(user_id_hash = %sha256_tag(user_id.as_bytes()), "User context initialized");
 
     // Create folders and feeds
     let mut folder_map: HashMap<String, Uuid> = HashMap::new();
@@ -1101,7 +1101,7 @@ async fn create_user(pool: &sqlx::PgPool, email: &str, password: &str, tier: &st
     .await
     .context("Failed to create user - email may already exist")?;
 
-    info!(email_hash = %sha256_tag(email.as_bytes()), user_id = %user_id, "Created user");
+    info!(email_hash = %sha256_tag(email.as_bytes()), user_id_hash = %sha256_tag(user_id.to_string().as_bytes()), "Created user");
 
     Ok(())
 }
@@ -1169,7 +1169,7 @@ async fn get_or_create_user(pool: &sqlx::PgPool, email: &str, password: &str) ->
     .fetch_one(pool)
     .await?;
 
-    info!(email_hash = %sha256_tag(email.as_bytes()), user_id = %user_id, "Created new user");
+    info!(email_hash = %sha256_tag(email.as_bytes()), user_id_hash = %sha256_tag(user_id.to_string().as_bytes()), "Created new user");
 
     Ok(user_id)
 }

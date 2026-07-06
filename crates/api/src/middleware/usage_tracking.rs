@@ -4,9 +4,21 @@
 //! Usage is recorded in the database and synced to Stripe periodically.
 
 use chrono::Timelike;
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use tracing::{error, warn};
 use uuid::Uuid;
+
+fn sha256_tag(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    format!(
+        "sha256:{}",
+        digest
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    )
+}
 
 /// Record an API call for usage tracking
 pub async fn record_api_call(db: &PgPool, user_id: Uuid, endpoint: &str) {
@@ -22,7 +34,7 @@ pub async fn record_api_call(db: &PgPool, user_id: Uuid, endpoint: &str) {
     .await;
 
     if let Err(e) = result {
-        warn!(user_id = %user_id, endpoint, error = %e, "Failed to record API call usage");
+        warn!(user_id_hash = %sha256_tag(user_id.to_string().as_bytes()), endpoint, error = %e, "Failed to record API call usage");
     }
 }
 
@@ -41,7 +53,7 @@ pub async fn record_ai_tokens(db: &PgPool, user_id: Uuid, tokens: i64, model: &s
     .await;
 
     if let Err(e) = result {
-        error!(user_id = %user_id, tokens, model, error = %e, "Failed to record AI token usage");
+        error!(user_id_hash = %sha256_tag(user_id.to_string().as_bytes()), tokens, model, error = %e, "Failed to record AI token usage");
     }
 }
 
