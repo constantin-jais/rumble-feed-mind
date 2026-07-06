@@ -64,7 +64,7 @@ fn build_router(state: AppState) -> Router {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    Router::new()
+    let mut router = Router::new()
         .merge(routes::health::router())
         .merge(routes::auth::router())
         .merge(routes::feeds::router())
@@ -73,8 +73,14 @@ fn build_router(state: AppState) -> Router {
         .merge(routes::categories::router())
         .merge(routes::rules::router())
         .merge(routes::tags::router())
-        .merge(routes::opml::router())
-        .merge(routes::billing::router())
+        .merge(routes::opml::router());
+
+    #[cfg(feature = "stripe")]
+    {
+        router = router.merge(routes::billing::router());
+    }
+
+    router
         .layer(TraceLayer::new_for_http())
         .layer(cors)
         .with_state(state)

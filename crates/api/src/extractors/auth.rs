@@ -6,8 +6,16 @@ use uuid::Uuid;
 
 use crate::error::ApiError;
 use crate::routes::auth::Claims;
-use crate::routes::billing::AccountStatus;
 use crate::state::AppState;
+
+/// Account status for request authorization checks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[sqlx(type_name = "account_status", rename_all = "snake_case")]
+pub enum AccountStatus {
+    Active,
+    GracePeriod,
+    Suspended,
+}
 
 /// Current authenticated user extracted from JWT
 #[derive(Debug, Clone)]

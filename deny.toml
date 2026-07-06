@@ -7,8 +7,11 @@ yanked = "warn"
 ignore = [
   # Temporary waivers accepted in docs/adr/0005-dependency-advisory-waivers.md.
   # Expire on 2026-09-30 or earlier if dependencies are replaced/isolated.
+  # Each advisory is linked to a removal plan (I1–I7) in the 2026-07 cleanup chantier.
   "RUSTSEC-2025-0057", # fxhash via scraper → deferred to Q3 2026 (docs/investigation/scraper-alternatives.md); review by 2026-08-31
-  "RUSTSEC-2026-0173", # proc-macro-error2 via UI/validator → upgrade UI deps (I6)
+  "RUSTSEC-2026-0174", # http-types via optional async-stripe feature → isolated from default/core builds; replace/remove adapter before waiver expiry
+  "RUSTSEC-2024-0384", # instant via optional async-stripe feature → isolated from default/core builds; replace/remove adapter before waiver expiry
+  "RUSTSEC-2026-0173", # proc-macro-error2 via UI/validator → active in validator; upstream no patch available (cargo update tested)
   "RUSTSEC-2026-0194", # quick-xml NsReader via feed-rs 2.3 → resolve feed-rs or constrain quick-xml (I7)
   "RUSTSEC-2026-0195", # quick-xml via feed-rs 2.3 → resolve feed-rs or constrain quick-xml (I7)
 ]

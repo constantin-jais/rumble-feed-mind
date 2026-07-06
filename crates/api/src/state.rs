@@ -6,6 +6,7 @@ use feedmind_crypto::KeyEncryption;
 use redis::aio::ConnectionManager;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+#[cfg(feature = "stripe")]
 use stripe::Client as StripeClient;
 
 use crate::config::{AppConfig, StripeConfig};
@@ -30,6 +31,7 @@ struct AppStateInner {
     /// Is production environment
     pub is_production: bool,
     /// Stripe client (None if billing disabled)
+    #[cfg(feature = "stripe")]
     pub stripe: Option<StripeClient>,
     /// Stripe configuration
     pub stripe_config: StripeConfig,
@@ -59,6 +61,7 @@ impl AppState {
         let encryption = KeyEncryption::from_base64(&config.master_key, config.master_key_version)?;
 
         // Setup Stripe client if configured
+        #[cfg(feature = "stripe")]
         let stripe = if config.stripe.is_configured() {
             Some(StripeClient::new(config.stripe.secret_key()))
         } else {
@@ -73,6 +76,7 @@ impl AppState {
                 jwt_secret: config.jwt_secret.clone(),
                 jwt_expiration: config.jwt_expiration,
                 is_production: config.is_production(),
+                #[cfg(feature = "stripe")]
                 stripe,
                 stripe_config: config.stripe.clone(),
             }),
@@ -110,6 +114,7 @@ impl AppState {
     }
 
     /// Get Stripe client (returns None if billing is disabled)
+    #[cfg(feature = "stripe")]
     pub fn stripe(&self) -> Option<&StripeClient> {
         self.inner.stripe.as_ref()
     }
@@ -120,7 +125,14 @@ impl AppState {
     }
 
     /// Check if billing is enabled
+    #[cfg(feature = "stripe")]
     pub fn billing_enabled(&self) -> bool {
         self.inner.stripe.is_some()
+    }
+
+    /// Check if billing is enabled
+    #[cfg(not(feature = "stripe"))]
+    pub fn billing_enabled(&self) -> bool {
+        false
     }
 }
