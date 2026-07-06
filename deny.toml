@@ -7,6 +7,7 @@ yanked = "warn"
 ignore = [
   # Temporary waivers accepted in docs/adr/0005-dependency-advisory-waivers.md.
   # Expire on 2026-09-30 or earlier if dependencies are replaced/isolated.
+  # Each advisory is linked to a removal plan (I1–I7) in the 2026-07 cleanup chantier.
   "RUSTSEC-2025-0057", # fxhash via scraper → deferred to Q3 2026 (docs/investigation/scraper-alternatives.md); review by 2026-08-31
   "RUSTSEC-2026-0174", # http-types via async-stripe → isolate stripe feature (I4)
   "RUSTSEC-2024-0384", # instant via async-stripe → isolate stripe feature (I4)
