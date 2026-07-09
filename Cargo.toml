@@ -47,7 +47,7 @@ scraper = "0.22"
 reqwest = { version = "0.12", features = ["json", "gzip"] }
 
 # Redis
-redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+redis = { version = "1.3", features = ["tokio-comp", "connection-manager"] }
 
 # Error handling
 thiserror = "2.0"
