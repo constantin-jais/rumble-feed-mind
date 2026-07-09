@@ -31,20 +31,7 @@ Réduit le bruit d’une veille en parsant des abonnements, appliquant des règl
 
 ## Dogfooding
 
-This repository is part of the Daidalos dogfooding loop: the ecosystem should use its own tools to make specs, maturity, contracts, releases, and product documentation observable.
-
-Current visible evidence:
-
-- Rust CI, security, contracts, and release workflows exercise the feed pipeline surface;
-- contracts and fixtures frame ingest, curation, BYOK, and export behavior;
-- README maturity notes keep advisories and runtime hardening limits explicit.
-
-Expected next evidence:
-
-- harden CuratedItemExport beyond the fixture workflow and complete adversarial log review;
-- make fail-closed feed cases visible as fixtures.
-
-Dogfooding claims should stay backed by visible commands, fixtures, CI workflows, generated reports, or linked docs.
+This repository is part of the **Free AI** tool family — one tool, one job, stacked.
 
 ## Contributing
 
