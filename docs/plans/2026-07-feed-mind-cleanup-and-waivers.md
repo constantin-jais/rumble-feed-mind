@@ -69,6 +69,7 @@ Post-ADR 0032 ecosystem ratification (ecosystem/specs/shared/adrs/0032-web-shell
 ### The source
 
 All increments are rooted in:
+
 - **ADR 0002** § Dioxus target decision (repo-local; reinforced by ecosystem DA-1).
 - **ADR 0005** § RustSec waiver removal plans (each advisory tied to a concrete action: "isolate", "upgrade", "replace", or "evaluate").
 - **ADR 0003** § Stripe optional adapter (authorizes async-stripe isolation).
@@ -77,14 +78,14 @@ All increments are rooted in:
 
 ### The current state
 
-| Item | Status | Evidence |
-| --- | --- | --- |
-| workspace members | 12 crates + 1 Rust app (web-rs) | Cargo.toml lines 3–16 |
-| legacy Next.js surface | ~7,613 LOC (excluding node_modules/.next), still in CI | apps/web/, security.yml lines 53–68 |
-| Leptos spike | 496 LOC Rust + tests passing | apps/web-rs/, docs/spikes/leptos-web-shell.md |
-| RustSec waivers | 7 items in deny.toml:10-16, but ADR 0005 table lists different 7 items; reconciliation required | deny.toml lines 10–16; ADR 0005 waiver table; **MISMATCH** at 2026-0194/2026-0195 |
-| Logging | tracing crate present; raw user_id logged in ≥10 locations across cli, api, worker crates | security.yml line 40–45 smoke check (scoped to specific paths); source audit found gaps |
-| CI gates | rust-ci (license, supply-chain, deny/audit), web-security (legacy Next.js), release | .github/workflows/* |
+| Item                   | Status                                                                                          | Evidence                                                                                |
+| ---------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| workspace members      | 12 crates + 1 Rust app (web-rs)                                                                 | Cargo.toml lines 3–16                                                                   |
+| legacy Next.js surface | ~7,613 LOC (excluding node_modules/.next), still in CI                                          | apps/web/, security.yml lines 53–68                                                     |
+| Leptos spike           | 496 LOC Rust + tests passing                                                                    | apps/web-rs/, docs/spikes/leptos-web-shell.md                                           |
+| RustSec waivers        | 7 items in deny.toml:10-16, but ADR 0005 table lists different 7 items; reconciliation required | deny.toml lines 10–16; ADR 0005 waiver table; **MISMATCH** at 2026-0194/2026-0195       |
+| Logging                | tracing crate present; raw user_id logged in ≥10 locations across cli, api, worker crates       | security.yml line 40–45 smoke check (scoped to specific paths); source audit found gaps |
+| CI gates               | rust-ci (license, supply-chain, deny/audit), web-security (legacy Next.js), release             | .github/workflows/*                                                                     |
 
 ## Target state
 
@@ -103,19 +104,20 @@ All increments are rooted in:
 
 Before merging I1, the following mismatch MUST be resolved:
 
-| Waiver | In deny.toml | In ADR 0005 table | Status |
-| --- | --- | --- | --- |
-| RUSTSEC-2025-0057 | ✓ | ✓ | Aligned (scraper/fxhash) |
-| RUSTSEC-2026-0174 | ✓ | ✓ | Aligned (http-types via async-stripe) |
-| RUSTSEC-2024-0384 | ✓ | ✓ | Aligned (instant via async-stripe) |
-| RUSTSEC-2024-0436 | ✓ | ✓ | Aligned (paste via UI) |
-| RUSTSEC-2026-0173 | ✓ | ✓ | Aligned (proc-macro-error2 via UI) |
-| RUSTSEC-2026-0194 | ✓ | ✗ | **MISMATCH**: in deny.toml only; not documented in ADR 0005 table |
-| RUSTSEC-2026-0195 | ✓ | ✗ | **MISMATCH**: in deny.toml only; not documented in ADR 0005 table |
-| RUSTSEC-2023-0071 (rsa) | ✗ | ✓ | In ADR 0005 but not in deny.toml ignore list |
-| RUSTSEC-2026-0097 (rand 0.7) | ✗ | ✓ | In ADR 0005 but not in deny.toml ignore list |
+| Waiver                       | In deny.toml | In ADR 0005 table | Status                                                            |
+| ---------------------------- | ------------ | ----------------- | ----------------------------------------------------------------- |
+| RUSTSEC-2025-0057            | ✓            | ✓                 | Aligned (scraper/fxhash)                                          |
+| RUSTSEC-2026-0174            | ✓            | ✓                 | Aligned (http-types via async-stripe)                             |
+| RUSTSEC-2024-0384            | ✓            | ✓                 | Aligned (instant via async-stripe)                                |
+| RUSTSEC-2024-0436            | ✓            | ✓                 | Aligned (paste via UI)                                            |
+| RUSTSEC-2026-0173            | ✓            | ✓                 | Aligned (proc-macro-error2 via UI)                                |
+| RUSTSEC-2026-0194            | ✓            | ✗                 | **MISMATCH**: in deny.toml only; not documented in ADR 0005 table |
+| RUSTSEC-2026-0195            | ✓            | ✗                 | **MISMATCH**: in deny.toml only; not documented in ADR 0005 table |
+| RUSTSEC-2023-0071 (rsa)      | ✗            | ✓                 | In ADR 0005 but not in deny.toml ignore list                      |
+| RUSTSEC-2026-0097 (rand 0.7) | ✗            | ✓                 | In ADR 0005 but not in deny.toml ignore list                      |
 
 **Action:** Issue RFD or ADR 0005 amendment to clarify:
+
 1. Are RUSTSEC-2026-0194 & 2026-0195 in-scope for removal by this wave? If yes, add explicit removal plan to ADR 0005. If no, defer I7 and document the constraint.
 2. Why are RUSTSEC-2023-0071 & 2026-0097 missing from deny.toml if ADR 0005 authorizes them? Update deny.toml to match ADR 0005 table or clarify that they have already been resolved upstream.
 
@@ -126,19 +128,23 @@ Before merging I1, the following mismatch MUST be resolved:
 ### I1 — Remove Leptos spike from workspace (PR: retire-leptos-spike)
 
 **Pre-requisites:**
+
 - Prerequisite reconciliation (deny.toml / ADR 0005) is complete.
 - Decision DA-1 (Dioxus 0.7.9 ratified) is in effect.
 - No code in the repo depends on apps/web-rs.
 
 **Files:**
+
 - `Cargo.toml` (workspace members list, line 15 delete).
 - `docs/adr/0002-rust-first-product-stack.md` (add notation that Leptos 0.7 spike was completed as evidence).
 
 **Work:**
+
 1. Remove `"apps/web-rs",` from `Cargo.toml` workspace members list (line 15).
 2. Append to ADR 0002 § Context a paragraph: "Leptos 0.7 spike evaluation (docs/spikes/leptos-web-shell.md) was completed 2026-07 and demonstrates Leptos viability for SSR+WASM; however, ecosystem convergence (DA-1 via ecosystem/specs/shared/adrs/0032-web-shell-dioxus-ratified.md, 2026-07-03) ratifies Dioxus 0.7.9 as the durable UI target for all Rumble products. The spike remains in this repository's history and spikes/ archive for future reference."
 
 **Exit gates:**
+
 - `cargo test --workspace` completes with 0 failures (should report fewer tests after web-rs removal).
 - `cargo fmt --all --check` succeeds.
 - `cargo check --workspace --all-targets --all-features` succeeds.
@@ -152,21 +158,25 @@ Before merging I1, the following mismatch MUST be resolved:
 ### I2 — Archive and remove legacy Next.js surface (PR: archive-legacy-nextjs)
 
 **Pre-requisites:**
+
 - I1 is merged (workspace is clean of Leptos spike).
 - `apps/web` is documented as reference migration only; no production data lives there.
 
 **Files:**
+
 - Create orphan branch `archive-2026-07-legacy-nextjs` with content of `apps/web/` and this commit message header: "archive: legacy Next.js reference surface (~7.6k LOC) — retained for migration reference, removed from main per feed-mind ADR 0002".
 - `apps/web/` (delete entire directory from main).
 - `.github/workflows/security.yml` (remove `web-security` job, lines 53–68).
 
 **Work:**
+
 1. Create branch `archive-2026-07-legacy-nextjs` pointing to current commit; checkout that branch locally and ensure it compiles/passes all tests.
 2. On main: delete `apps/web/` directory.
 3. On main: edit `.github/workflows/security.yml` — remove the entire `web-security:` job block (lines 53–68). Verify the YAML syntax is still valid.
 4. Commit to main with message: "chore: archive legacy Next.js surface (apps/web) to branch archive-2026-07-legacy-nextjs; remove from CI workflows".
 
 **Exit gates:**
+
 - `cargo test --workspace` passes (no web dependencies break Rust builds).
 - `.github/workflows/security.yml` remains valid YAML (no dangling job references).
 - GitHub Actions security workflow still runs on push to main (license-check and rust-supply-chain jobs execute; only web-security is removed).
@@ -177,9 +187,11 @@ Before merging I1, the following mismatch MUST be resolved:
 ### I3 — Correct CI gates and classify logs (PR: ci-gates-and-log-classification)
 
 **Pre-requisites:**
+
 - I1 and I2 are merged.
 
 **Files:**
+
 - `.github/workflows/security.yml` (log privacy smoke check, update patterns and scopes).
 - `crates/cli/src/main.rs` (replace raw user_id logging at line 954 and structed-logging occurrences at 1104, 1172).
 - `crates/api/src/routes/billing/webhooks.rs` (replace user_id = %user_id at line 310).
@@ -189,10 +201,12 @@ Before merging I1, the following mismatch MUST be resolved:
 **Work:**
 
 1. **Comprehensive audit for raw user_id/email across all crates:**
+
    ```bash
    grep -rn 'user_id\s*=\s*%\|info!(%user_id\|debug!(%user_id\|info!(".*user' \
      crates/api/src crates/cli/src crates/worker/src crates/ingest/src --include="*.rs"
    ```
+
    Expected hits (locations to fix):
    - `crates/cli/src/main.rs:954` — `info!("Using user ID: {}", user_id);` (raw format string)
    - `crates/cli/src/main.rs:1104` — `user_id = %user_id` (structured field, displays raw value)
@@ -202,25 +216,27 @@ Before merging I1, the following mismatch MUST be resolved:
    - `crates/worker/src/handlers/dunning.rs:324, 343` — `user_id = %user_id` (structured field)
 
 2. **Replace at all identified locations:**
+
    ```rust
    // Before (example from crates/cli/src/main.rs:954):
    info!("Using user ID: {}", user_id);
-   
+
    // After (use tracing span context and hashing):
    info!(user_id_hash = %sha256_tag(user_id.as_bytes()), "User context initialized");
-   
+
    // OR before (example from structured: crates/cli/src/main.rs:1104):
    info!(email_hash = %sha256_tag(email.as_bytes()), user_id = %user_id, "Created user");
-   
+
    // After (remove raw user_id, keep hashed email):
    info!(email_hash = %sha256_tag(email.as_bytes()), user_id_hash = %sha256_tag(user_id.as_bytes()), "Created user");
-   
+
    // OR (if tracing span preferred):
    info!(email_hash = %sha256_tag(email.as_bytes()), "Created user");
    // with span set separately: tracing::span!(tracing::Level::INFO, "user_context", user_id_hash = %sha256_tag(user_id.as_bytes()))
    ```
 
 3. **Verify no other user_id/email logs exist in the specified crates** after fixes:
+
    ```bash
    grep -rn 'user_id\s*=\s*%\|info!(%user_id\|debug!(%user_id\|email\s*=\s*%' \
      crates/api/src crates/cli/src crates/worker/src crates/ingest/src --include="*.rs" \
@@ -228,6 +244,7 @@ Before merging I1, the following mismatch MUST be resolved:
    ```
 
 4. **Update `.github/workflows/security.yml` log privacy smoke check** (lines 40–45) to be explicit about expanded scope:
+
    ```yaml
    - name: Log privacy smoke
      run: |
@@ -239,6 +256,7 @@ Before merging I1, the following mismatch MUST be resolved:
          exit 1
        fi
    ```
+
    (Ensures all crates/worker paths are checked, not just main.rs.)
 
 5. **Verify all workspace members are tested:**
@@ -249,6 +267,7 @@ Before merging I1, the following mismatch MUST be resolved:
    Expected: test suites for crypto, domain, ingest, opml, rules, sync, storage, core, api, worker, cli (11 crates). No apps/ should appear.
 
 **Exit gates:**
+
 - `cargo test --workspace --all-features` passes and lists tests from all 11 crates (no gaps, no apps/).
 - `.github/workflows/security.yml` log privacy smoke check runs and passes (no PII patterns found across all crates).
 - `grep -rn 'user_id\s*=\s*%\|info!(%user_id\|debug!(%user_id' crates/ --include="*.rs"` returns 0 matches (all raw user_id logging removed).
@@ -260,50 +279,58 @@ Before merging I1, the following mismatch MUST be resolved:
 ### I4 — Isolate and feature-gate async-stripe (PR: isolate-async-stripe)
 
 **Pre-requisites:**
+
 - I1, I2, I3 merged.
 - Review crates/api/src/routes/billing/ to understand current async-stripe usage.
 - ADR 0003 (stripe-optional-payment-adapter) authorizes this isolation.
 
 **Files:**
+
 - `Cargo.toml` (workspace, line 94: make stripe optional).
 - `crates/api/Cargo.toml` (add stripe as optional feature dependency).
 - `deny.toml` (remove RUSTSEC-2026-0174 and RUSTSEC-2024-0384 waivers).
 - `crates/api/src/main.rs` or routes module (conditionally compile billing routes).
 
 **Work:**
+
 1. Edit `Cargo.toml` (workspace level) — make stripe optional (currently at line 94; may shift after I2):
+
    ```toml
    # OLD:
    stripe = { package = "async-stripe", version = "0.39", features = ["runtime-tokio-hyper"] }
-   
+
    # NEW: remove from workspace.dependencies (move to crates/api)
    ```
 
 2. Edit `crates/api/Cargo.toml` — add stripe as optional feature:
+
    ```toml
    [dependencies]
    # ... (existing)
    stripe = { package = "async-stripe", version = "0.39", features = ["runtime-tokio-hyper"], optional = true }
-   
+
    [features]
    default = []
    stripe = ["dep:stripe"]
    ```
 
 3. Edit `crates/api/src/main.rs` or routes module — conditionally compile billing routes:
+
    ```rust
    #[cfg(feature = "stripe")]
    pub mod routes {
        pub mod billing;
    }
-   
+
    // Alternatively, if billing is already a submodule:
    #[cfg(feature = "stripe")]
    mod billing;
    ```
+
    (Exact placement depends on current structure; inspect crates/api/src/main.rs to determine the best location.)
 
 4. Edit `deny.toml` — remove lines for RUSTSEC-2026-0174 and RUSTSEC-2024-0384 from the ignore list:
+
    ```toml
    # Before (lines 10-16):
    ignore = [
@@ -315,7 +342,7 @@ Before merging I1, the following mismatch MUST be resolved:
      "RUSTSEC-2026-0194",
      "RUSTSEC-2026-0195",
    ]
-   
+
    # After:
    ignore = [
      "RUSTSEC-2025-0057",
@@ -327,6 +354,7 @@ Before merging I1, the following mismatch MUST be resolved:
    ```
 
 5. **Verify builds with and without the feature:**
+
    ```bash
    cargo build --package feedmind-api --no-default-features
    cargo build --package feedmind-api --features stripe
@@ -338,6 +366,7 @@ Before merging I1, the following mismatch MUST be resolved:
    ```
 
 **Exit gates:**
+
 - `cargo test --workspace --all-features` passes (includes stripe feature).
 - `cargo test --workspace --no-default-features` passes (stripe feature is optional; builds without it).
 - `cargo deny check advisories` passes (RUSTSEC-2026-0174 and RUSTSEC-2024-0384 no longer appear in waiver list).
@@ -346,6 +375,7 @@ Before merging I1, the following mismatch MUST be resolved:
 - GitHub Rust CI and security workflows pass.
 
 **Exit gate command (proof):**
+
 ```bash
 cargo deny check advisories && echo "PASS: Stripe-related waivers removed" || echo "FAIL: waivers still present"
 ```
@@ -355,15 +385,18 @@ cargo deny check advisories && echo "PASS: Stripe-related waivers removed" || ec
 ### I5 — Evaluate and plan scraper replacement (PR: investigate-scraper-replacement)
 
 **Pre-requisites:**
+
 - I1–I4 merged.
 - ADR 0005 § "Evaluate replacing `scraper` or moving reusable extraction pressure to Gear Loader" (authorized removal plan).
 
 **Files:**
+
 - `docs/investigation/scraper-alternatives.md` (new file, document findings).
 - `deny.toml` (conditionally: update RUSTSEC-2025-0057 waiver comment if decision is to defer).
 - `docs/adr/0005-dependency-advisory-waivers.md` (amendment, if decision is to defer or revise timeline).
 
 **Work:**
+
 1. Research scraper library alternatives and impact:
    - `select.rs` (CSS selector, no HTML parsing) — would require paired HTML parser like html5ever; evaluate effort.
    - `ego-tree` (tree structure) — no built-in parsing; not a drop-in replacement.
@@ -387,6 +420,7 @@ cargo deny check advisories && echo "PASS: Stripe-related waivers removed" || ec
    - Create a GitHub issue in rumble-feed-mind to track the follow-up work and link in commit message.
 
 **Exit gates:**
+
 - Investigation document is merged and linked from ADR 0005.
 - If replacement is in scope: refactor plan is documented as follow-up increment or distinct chantier (with separate PR).
 - If deferred: `deny.toml` waiver comment is updated with explicit timeline and GitHub issue number; ADR 0005 is amended.
@@ -398,16 +432,20 @@ cargo deny check advisories && echo "PASS: Stripe-related waivers removed" || ec
 ### I6 — Upgrade UI dependencies (PR: upgrade-ui-deps)
 
 **Pre-requisites:**
+
 - I1–I4 merged.
 - Identify exact versions of paste and proc-macro-error2 causing RUSTSEC-2024-0436 and RUSTSEC-2026-0173.
 
 **Files:**
+
 - `Cargo.lock` (updated via cargo update).
 - `Cargo.toml` (any crate depending on paste/proc-macro-error2 as direct dependency, if needed).
 - `deny.toml` (remove RUSTSEC-2024-0436 and RUSTSEC-2026-0173 waivers).
 
 **Work:**
+
 1. Identify which crates use paste and proc-macro-error2:
+
    ```bash
    grep -r "^paste\|^proc-macro-error2" $DEV_ROOT/rumble-feed-mind/Cargo.lock | head -5
    cargo tree -i paste
@@ -415,6 +453,7 @@ cargo deny check advisories && echo "PASS: Stripe-related waivers removed" || ec
    ```
 
 2. If they are transitive (pulled in by validator, syn, or other UI/proc-macro crates):
+
    ```bash
    # Upgrade the crate that pulls them in (likely validator or a UI-related proc-macro)
    cargo update -p validator
@@ -422,9 +461,11 @@ cargo deny check advisories && echo "PASS: Stripe-related waivers removed" || ec
    ```
 
 3. Verify the upgraded versions no longer carry the waivers:
+
    ```bash
    cargo deny check advisories 2>&1 | grep -E "RUSTSEC-2024-0436|RUSTSEC-2026-0173"
    ```
+
    Expected: no output (waivers gone).
 
 4. Edit `deny.toml` — remove lines for RUSTSEC-2024-0436 and RUSTSEC-2026-0173 from the ignore list.
@@ -432,6 +473,7 @@ cargo deny check advisories && echo "PASS: Stripe-related waivers removed" || ec
 5. Run full test suite to ensure upgrades don't break API or behavior.
 
 **Exit gates:**
+
 - `cargo test --workspace --all-features` passes.
 - `cargo deny check advisories` passes (RUSTSEC-2024-0436 and RUSTSEC-2026-0173 no longer in waiver list).
 - `cargo deny check licenses` passes (upgraded deps don't introduce new licenses).
@@ -439,6 +481,7 @@ cargo deny check advisories && echo "PASS: Stripe-related waivers removed" || ec
 - GitHub Rust CI and security workflows pass.
 
 **Exit gate command (proof):**
+
 ```bash
 cargo deny check advisories | grep -E "RUSTSEC-2024-0436|RUSTSEC-2026-0173" && echo "FAIL: waivers still present" || echo "PASS: waivers removed"
 ```
@@ -448,12 +491,14 @@ cargo deny check advisories | grep -E "RUSTSEC-2024-0436|RUSTSEC-2026-0173" && e
 ### I7 — Address quick-xml advisories (PR: resolve-feed-rs-deps OR force-quickxml-constraint)
 
 **Pre-requisites:**
+
 - I1–I6 merged.
 - **BLOCKING**: Prerequisite reconciliation confirmed that RUSTSEC-2026-0194 and RUSTSEC-2026-0195 are authorized for removal by this wave (either via ADR 0005 amendment or separate RFD).
 - feed-rs 2.3 upstream status is assessed: no patch available as of 2026-07-03.
 - **Hard deadline for decision**: 2026-08-31. If feed-rs upstream is unresponsive by this date, Option B (force safe quick-xml constraint) becomes mandatory; do not extend waivers past 2026-09-30 without re-authorization.
 
 **Files:**
+
 - `Cargo.toml` (workspace, conditional: add direct quick-xml constraint if forcing safe version).
 - `deny.toml` (remove RUSTSEC-2026-0194 and RUSTSEC-2026-0195 waivers if resolved).
 - `docs/investigation/feed-rs-quick-xml.md` (document the chosen path and escalation status).
@@ -461,6 +506,7 @@ cargo deny check advisories | grep -E "RUSTSEC-2024-0436|RUSTSEC-2026-0173" && e
 **Work:**
 
 **Option A: Upstream patch (if feed-rs releases fix by 2026-08-31):**
+
 1. Await feed-rs 2.4 or patch release; upon availability, upgrade:
    ```bash
    cargo update -p feed-rs
@@ -473,6 +519,7 @@ cargo deny check advisories | grep -E "RUSTSEC-2024-0436|RUSTSEC-2026-0173" && e
 4. Edit `deny.toml` — remove the two waivers from ignore list.
 
 **Option B: Force safe quick-xml constraint (if upstream unresponsive by 2026-08-31):**
+
 1. Determine the safe version of quick-xml (consult RustSec advisory dates and quick-xml release history).
    Suppose safe version is quick-xml ≥ 0.29 (example; adjust based on actual advisory data).
 2. Add direct constraint to `Cargo.toml` (workspace.dependencies):
@@ -494,12 +541,14 @@ cargo deny check advisories | grep -E "RUSTSEC-2024-0436|RUSTSEC-2026-0173" && e
 7. Document in `docs/investigation/feed-rs-quick-xml.md` the constraint imposed and rationale.
 
 **Option C: Open upstream escalation (if no safe constraint exists and feed-rs is unmaintained):**
+
 1. **Only if Options A and B are not feasible.** Open issue on feed-rs GitHub: "quick-xml ≤0.28 has critical security advisories RUSTSEC-2026-0194/2026-0195; rumble-feed-mind cannot upgrade without upstream fix or quick-xml patch. Please advise timeline or alternative."
 2. Document the escalation in `docs/investigation/feed-rs-quick-xml.md`.
 3. **Do NOT extend the RUSTSEC-2026-0194 and RUSTSEC-2026-0195 waivers past 2026-09-30 without explicit re-authorization via ADR amendment or separate RFD.** If Option C is chosen, defer to post-2026-09-30 wave with separate decision.
 4. Create GitHub issue in rumble-feed-mind to track the escalation, deadline, and fallback to alternative ingestion library.
 
 **Exit gates (Option A or B only; if choosing C, do NOT merge I7, defer and open follow-up RFD):**
+
 - `cargo test --workspace --all-features` passes.
 - `cargo deny check advisories` passes (RUSTSEC-2026-0194 and RUSTSEC-2026-0195 removed from ignore list).
 - `crates/ingest` tests pass (feed parsing behavior unchanged, no regression).
@@ -508,6 +557,7 @@ cargo deny check advisories | grep -E "RUSTSEC-2024-0436|RUSTSEC-2026-0173" && e
 - Investigation document (`docs/investigation/feed-rs-quick-xml.md`) is merged and linked from ADR 0005 amendment.
 
 **Exit gate command (proof):**
+
 ```bash
 cargo deny check advisories | grep -E "RUSTSEC-2026-0194|RUSTSEC-2026-0195" && echo "FAIL: waivers still present" || echo "PASS: waivers removed"
 ```
@@ -567,6 +617,7 @@ The following are **not** part of this chantier:
    - ADR 0032 reference is clarified as ecosystem-level decision (not duplicated into feed-mind local ADR archive).
 
 **Verification commands (run after all PRs merged):**
+
 ```bash
 # Workspace integrity
 cargo test --workspace --all-features
@@ -596,5 +647,5 @@ git grep "web-security" -- .github/workflows/ || echo "PASS: web-security job re
 ---
 
 **Plan created:** 2026-07-03  
-**Status:** Awaiting prerequisite reconciliation before execution (BLOCKING GATE); planning only thereafter; human approval required for each increment merge  
-**Next step:** Issue RFD or ADR 0005 amendment to reconcile deny.toml / ADR 0005 mismatch (RUSTSEC-2026-0194, 2026-0195 authorization); then delegate I1 execution
+**Status:** Completed  
+**Completion note (2026-07-09):** Prerequisite (#19) and I1–I7 (#20–#26) all merged. Correction from the hygiene audit: the two async-stripe waivers (RUSTSEC-2026-0174, RUSTSEC-2024-0384) are still REQUIRED by the CI supply-chain gate — a removal attempt failed cargo-deny advisories and was reverted (#30); the earlier "advisory-not-detected" reading was a local feature-set artifact. Review points 2026-08-31 (scraper, quick-xml) and the external 2026-09-30 deadline unchanged.
