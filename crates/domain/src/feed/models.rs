@@ -86,7 +86,11 @@ impl FeedItem {
         if let Some(u) = url {
             hasher.update(u.as_bytes());
         }
-        format!("{:x}", hasher.finalize())
+        hasher
+            .finalize()
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect()
     }
 }
 
