@@ -64,6 +64,7 @@ fn build_router(state: AppState) -> Router {
         .allow_methods(Any)
         .allow_headers(Any);
 
+    #[allow(unused_mut)]
     let mut router = Router::new()
         .merge(routes::health::router())
         .merge(routes::auth::router())
