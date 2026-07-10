@@ -28,7 +28,7 @@ feed-rs = { workspace = true }
 scraper = { workspace = true }
 
 # XML parsing (for OPML)
-quick-xml = "0.37"
+quick-xml = "0.41"
 
 # HTTP client
 reqwest = { workspace = true }

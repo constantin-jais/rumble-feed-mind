@@ -120,8 +120,8 @@ impl OpmlParser {
         loop {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Text(e)) => {
-                    if let Ok(text) = e.unescape() {
-                        content.push_str(&text);
+                    if let Ok(text) = e.decode() {
+                        content.push_str(text.as_ref());
                     }
                 }
                 Ok(Event::End(_)) | Ok(Event::Eof) => break,
