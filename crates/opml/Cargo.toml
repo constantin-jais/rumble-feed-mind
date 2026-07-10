@@ -6,6 +6,6 @@ license.workspace = true
 
 [dependencies]
 feedmind-domain = { workspace = true }
-quick-xml = "0.37"
+quick-xml = "0.41"
 thiserror = { workspace = true }
 tracing = { workspace = true }
