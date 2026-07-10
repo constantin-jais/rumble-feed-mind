@@ -647,5 +647,6 @@ git grep "web-security" -- .github/workflows/ || echo "PASS: web-security job re
 ---
 
 **Plan created:** 2026-07-03  
-**Status:** Completed  
-**Completion note (2026-07-09):** Prerequisite (#19) and I1–I7 (#20–#26) all merged. Correction from the hygiene audit: the two async-stripe waivers (RUSTSEC-2026-0174, RUSTSEC-2024-0384) are still REQUIRED by the CI supply-chain gate — a removal attempt failed cargo-deny advisories and was reverted (#30); the earlier "advisory-not-detected" reading was a local feature-set artifact. Review points 2026-08-31 (scraper, quick-xml) and the external 2026-09-30 deadline unchanged.
+**Status:** In Progress (I7 completed, final review due 2026-08-31)  
+**Completion note (2026-07-09):** Prerequisite (#19) and I1–I7 (#20–#26) all merged. Correction from the hygiene audit: the two async-stripe waivers (RUSTSEC-2026-0174, RUSTSEC-2024-0384) are still REQUIRED by the CI supply-chain gate — a removal attempt failed cargo-deny advisories and was reverted (#30); the earlier "advisory-not-detected" reading was a local feature-set artifact. Review points 2026-08-31 (scraper, quick-xml) and the external 2026-09-30 deadline unchanged.  
+**I7 Completion note (2026-07-10):** RUSTSEC-2026-0194 & RUSTSEC-2026-0195 (quick-xml via feed-rs) resolved via Option A (upstream patch + direct dependency upgrade). Bumped quick-xml from 0.37 to 0.41.0 in feedmind-core and feedmind-opml crates; updated OPML parser to use quick-xml 0.41's `decode()` API. Waivers removed from deny.toml (PR #44, merged 2026-07-10). All tests pass. Next review point: scraper replacement (RUSTSEC-2025-0057) due 2026-08-31.
