@@ -31,7 +31,7 @@ Réduit le bruit d’une veille en parsant des abonnements, appliquant des règl
 
 ## Dogfooding
 
-This repository is part of the **Free AI** tool family — one tool, one job, stacked.
+This repository is part of the **Libre IA** tool family — one tool, one job, stacked.
 
 ## Contributing
 
