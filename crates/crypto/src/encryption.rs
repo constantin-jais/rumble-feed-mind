@@ -3,8 +3,8 @@
 use std::fmt;
 
 use aes_gcm::{
-    aead::{Aead, KeyInit},
-    Aes256Gcm, Nonce,
+    aead::{Aead, KeyInit, Nonce},
+    Aes256Gcm,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use hkdf::Hkdf;
@@ -91,7 +91,10 @@ impl KeyEncryption {
         // Generate random nonce
         let mut nonce_bytes = [0u8; 12];
         rand::rng().fill_bytes(&mut nonce_bytes);
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce: &Nonce<Aes256Gcm> = nonce_bytes
+            .as_slice()
+            .try_into()
+            .map_err(|_| Error::Encryption("Failed to construct nonce".to_string()))?;
 
         // Encrypt
         let ciphertext = cipher
@@ -127,11 +130,10 @@ impl KeyEncryption {
             .decode(&encrypted.nonce)
             .map_err(|e| Error::Decryption(format!("Invalid nonce: {}", e)))?;
 
-        if nonce_bytes.len() != 12 {
-            return Err(Error::Decryption("Invalid nonce length".to_string()));
-        }
-
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce: &Nonce<Aes256Gcm> = nonce_bytes
+            .as_slice()
+            .try_into()
+            .map_err(|_| Error::Decryption("Invalid nonce length".to_string()))?;
 
         let plaintext = cipher
             .decrypt(nonce, ciphertext.as_ref())
