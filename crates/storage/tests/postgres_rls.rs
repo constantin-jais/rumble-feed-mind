@@ -80,26 +80,26 @@ async fn provision_group_roles(admin: &PgPool) {
 }
 
 async fn provision_test_principals(admin: &PgPool) {
-    for (name, group, create) in [
+    for (name, create, grant) in [
         (
             "feed_radar_migrator_test",
-            "feed_radar_owner",
             "CREATE ROLE feed_radar_migrator_test LOGIN NOINHERIT PASSWORD 'feed_radar_test_only'",
+            "GRANT feed_radar_owner TO feed_radar_migrator_test",
         ),
         (
             "feed_radar_app_test",
-            "feed_radar_app",
             "CREATE ROLE feed_radar_app_test LOGIN NOINHERIT PASSWORD 'feed_radar_test_only'",
+            "GRANT feed_radar_app TO feed_radar_app_test",
         ),
         (
             "feed_radar_auth_test",
-            "feed_radar_auth",
             "CREATE ROLE feed_radar_auth_test LOGIN NOINHERIT PASSWORD 'feed_radar_test_only'",
+            "GRANT feed_radar_auth TO feed_radar_auth_test",
         ),
         (
             "feed_radar_worker_test",
-            "feed_radar_worker",
             "CREATE ROLE feed_radar_worker_test LOGIN NOINHERIT PASSWORD 'feed_radar_test_only'",
+            "GRANT feed_radar_worker TO feed_radar_worker_test",
         ),
     ] {
         let exists: bool =
@@ -114,7 +114,7 @@ async fn provision_test_principals(admin: &PgPool) {
                 .await
                 .expect("test principal creation must succeed");
         }
-        sqlx::query(&format!("GRANT {group} TO {name}"))
+        sqlx::query(grant)
             .execute(admin)
             .await
             .expect("test role membership must be granted");
