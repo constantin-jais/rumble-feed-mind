@@ -31,7 +31,7 @@ tower = "0.5"
 tower-http = { version = "0.7", features = ["cors", "trace", "compression-gzip"] }
 
 # Database
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "macros", "migrate", "postgres", "uuid", "chrono", "json"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls", "macros", "migrate", "postgres", "uuid", "chrono", "json"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -72,6 +72,7 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Password hashing
 argon2 = "0.5"
+password-hash = { version = "0.5", features = ["getrandom"] }
 
 # JWT
 jsonwebtoken = "10.3"

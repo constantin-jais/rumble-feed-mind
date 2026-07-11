@@ -105,103 +105,56 @@ async fn list_articles(
     let mut tx = state.tenant_tx(user.id).await?;
     let limit = query.limit.unwrap_or(50).min(100);
 
-    // Build status filter
-    let status_filter = match query.status.as_deref() {
-        Some("unread") => "AND a.is_read = FALSE AND a.is_hidden = FALSE",
-        Some("read") => "AND a.is_read = TRUE",
-        Some("starred") => "AND a.is_starred = TRUE",
-        Some("hidden") => "AND a.is_hidden = TRUE",
-        _ => "AND a.is_hidden = FALSE",
-    };
-
-    // Build category filter (using ?| operator for "any of" matching)
-    let category_filter = if let Some(ref cats) = query.categories {
-        let categories: Vec<&str> = cats
-            .split(',')
-            .map(|s| s.trim())
-            .filter(|s| !s.is_empty())
-            .collect();
-        if !categories.is_empty() {
-            format!(
-                "AND a.categories ?| ARRAY[{}]",
-                categories
-                    .iter()
-                    .map(|c| format!("'{}'", c.replace('\'', "''")))
-                    .collect::<Vec<_>>()
-                    .join(",")
-            )
-        } else {
-            String::new()
-        }
+    let categories = query
+        .categories
+        .as_deref()
+        .map(|values| {
+            values
+                .split(',')
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .filter(|values| !values.is_empty());
+    let feed_id = query.feed_id;
+    // Preserve the public contract: an explicit feed takes precedence over a folder.
+    let folder_id = if feed_id.is_some() {
+        None
     } else {
-        String::new()
+        query.folder_id
     };
 
-    // Build query based on filters
-    let articles: Vec<ArticleListItem> = match (query.feed_id, query.folder_id) {
-        (Some(feed_id), _) => {
-            // Filter by feed
-            sqlx::query_as(&format!(
-                r#"
-                SELECT a.id, a.feed_id, f.title as feed_title, a.url, a.title, a.author,
-                       a.summary, a.image_url, a.published_at, a.is_read, a.is_starred, a.word_count,
-                       a.categories
-                FROM articles a
-                JOIN feeds f ON f.id = a.feed_id
-                WHERE a.user_id = $1 AND a.feed_id = $2 {} {}
-                ORDER BY a.published_at DESC NULLS LAST
-                LIMIT $3
-                "#,
-                status_filter, category_filter
-            ))
-            .bind(user.id)
-            .bind(feed_id)
-            .bind(limit)
-            .fetch_all(tx.connection())
-            .await
-        }
-        (_, Some(folder_id)) => {
-            // Filter by folder
-            sqlx::query_as(&format!(
-                r#"
-                SELECT a.id, a.feed_id, f.title as feed_title, a.url, a.title, a.author,
-                       a.summary, a.image_url, a.published_at, a.is_read, a.is_starred, a.word_count,
-                       a.categories
-                FROM articles a
-                JOIN feeds f ON f.id = a.feed_id
-                WHERE a.user_id = $1 AND f.folder_id = $2 {} {}
-                ORDER BY a.published_at DESC NULLS LAST
-                LIMIT $3
-                "#,
-                status_filter, category_filter
-            ))
-            .bind(user.id)
-            .bind(folder_id)
-            .bind(limit)
-            .fetch_all(tx.connection())
-            .await
-        }
-        _ => {
-            // All articles
-            sqlx::query_as(&format!(
-                r#"
-                SELECT a.id, a.feed_id, f.title as feed_title, a.url, a.title, a.author,
-                       a.summary, a.image_url, a.published_at, a.is_read, a.is_starred, a.word_count,
-                       a.categories
-                FROM articles a
-                JOIN feeds f ON f.id = a.feed_id
-                WHERE a.user_id = $1 {} {}
-                ORDER BY a.published_at DESC NULLS LAST
-                LIMIT $2
-                "#,
-                status_filter, category_filter
-            ))
-            .bind(user.id)
-            .bind(limit)
-            .fetch_all(tx.connection())
-            .await
-        }
-    }
+    let articles: Vec<ArticleListItem> = sqlx::query_as(
+        r#"
+        SELECT a.id, a.feed_id, f.title as feed_title, a.url, a.title, a.author,
+               a.summary, a.image_url, a.published_at, a.is_read, a.is_starred, a.word_count,
+               a.categories
+        FROM articles a
+        JOIN feeds f ON f.id = a.feed_id
+        WHERE a.user_id = $1
+          AND CASE $2
+                WHEN 'unread' THEN a.is_read = FALSE AND a.is_hidden = FALSE
+                WHEN 'read' THEN a.is_read = TRUE
+                WHEN 'starred' THEN a.is_starred = TRUE
+                WHEN 'hidden' THEN a.is_hidden = TRUE
+                ELSE a.is_hidden = FALSE
+              END
+          AND ($3::text[] IS NULL OR a.categories ?| $3)
+          AND ($4::uuid IS NULL OR a.feed_id = $4)
+          AND ($5::uuid IS NULL OR f.folder_id = $5)
+        ORDER BY a.published_at DESC NULLS LAST
+        LIMIT $6
+        "#,
+    )
+    .bind(user.id)
+    .bind(query.status.as_deref())
+    .bind(categories)
+    .bind(feed_id)
+    .bind(folder_id)
+    .bind(limit)
+    .fetch_all(tx.connection())
+    .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
     // Get total count
@@ -260,56 +213,33 @@ async fn update_article(
     Path(article_id): Path<Uuid>,
     Json(req): Json<UpdateArticleRequest>,
 ) -> ApiResult<Json<ArticleResponse>> {
-    // Build update query dynamically
-    let mut updates = Vec::new();
-    let mut param_idx = 3;
-
-    if req.is_read.is_some() {
-        updates.push(format!("is_read = ${}", param_idx));
-        param_idx += 1;
-        if req.is_read == Some(true) {
-            updates.push("read_at = NOW()".to_string());
-        }
-    }
-    if req.is_starred.is_some() {
-        updates.push(format!("is_starred = ${}", param_idx));
-        if req.is_starred == Some(true) {
-            updates.push("starred_at = NOW()".to_string());
-        }
-    }
-
-    if updates.is_empty() {
-        // Nothing to update, just return the article
+    if req.is_read.is_none() && req.is_starred.is_none() {
+        // Nothing to update, just return the article.
         return get_article(State(state), user, Path(article_id)).await;
     }
 
     let mut tx = state.tenant_tx(user.id).await?;
-    let query = format!(
+    let article = sqlx::query_as::<_, ArticleRow>(
         r#"
-        UPDATE articles SET {}, updated_at = NOW()
+        UPDATE articles
+        SET is_read = COALESCE($3, is_read),
+            read_at = CASE WHEN $3 IS TRUE THEN NOW() ELSE read_at END,
+            is_starred = COALESCE($4, is_starred),
+            starred_at = CASE WHEN $4 IS TRUE THEN NOW() ELSE starred_at END,
+            updated_at = NOW()
         WHERE id = $1 AND user_id = $2
         RETURNING id, feed_id, url, title, author, summary, content, image_url,
                   published_at, is_read, is_starred, is_hidden, word_count, created_at
         "#,
-        updates.join(", ")
-    );
-
-    let mut query_builder = sqlx::query_as::<_, ArticleRow>(&query)
-        .bind(article_id)
-        .bind(user.id);
-
-    if let Some(is_read) = req.is_read {
-        query_builder = query_builder.bind(is_read);
-    }
-    if let Some(is_starred) = req.is_starred {
-        query_builder = query_builder.bind(is_starred);
-    }
-
-    let article = query_builder
-        .fetch_optional(tx.connection())
-        .await
-        .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
-        .ok_or_else(|| ApiError::NotFound("Article not found".to_string()))?;
+    )
+    .bind(article_id)
+    .bind(user.id)
+    .bind(req.is_read)
+    .bind(req.is_starred)
+    .fetch_optional(tx.connection())
+    .await
+    .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+    .ok_or_else(|| ApiError::NotFound("Article not found".to_string()))?;
     tx.commit().await?;
 
     Ok(Json(ArticleResponse { data: article }))

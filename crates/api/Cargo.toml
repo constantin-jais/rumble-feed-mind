@@ -58,6 +58,7 @@ chrono = { workspace = true }
 
 # Auth
 argon2 = { workspace = true }
+password-hash = { workspace = true }
 jsonwebtoken = { workspace = true }
 
 # Utils

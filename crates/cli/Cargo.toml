@@ -20,7 +20,7 @@ feedmind-storage = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 
 # Database
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "macros", "migrate", "postgres", "uuid", "chrono"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls", "macros", "migrate", "postgres", "uuid", "chrono"] }
 
 # CLI
 clap = { version = "4", features = ["derive"] }
@@ -44,4 +44,5 @@ chrono = { version = "0.4", features = ["serde"] }
 dotenvy = "0.15"
 
 # Password hashing
-argon2 = "0.5"
+argon2 = { workspace = true }
+password-hash = { workspace = true }
