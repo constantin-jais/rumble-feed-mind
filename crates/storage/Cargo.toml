@@ -7,5 +7,9 @@ license.workspace = true
 [dependencies]
 feedmind-domain = { workspace = true }
 feedmind-sync = { workspace = true }
+sqlx = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

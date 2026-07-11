@@ -1,8 +1,9 @@
 //! Application state
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use feedmind_crypto::KeyEncryption;
+use feedmind_storage::TenantTransaction;
 use redis::aio::ConnectionManager;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
@@ -18,8 +19,13 @@ pub struct AppState {
 }
 
 struct AppStateInner {
-    /// Database connection pool
+    /// Tenant-scoped application connection pool.
     pub db: PgPool,
+    /// Authentication boundary pool; direct product-table access is denied.
+    pub auth_db: PgPool,
+    /// Trusted worker pool for cross-tenant webhook processing.
+    #[cfg(feature = "stripe")]
+    pub worker_db: PgPool,
     /// Redis connection manager
     pub redis: ConnectionManager,
     /// Key encryption handler
@@ -40,17 +46,24 @@ struct AppStateInner {
 impl AppState {
     /// Create new app state from config
     pub async fn new(config: &AppConfig) -> anyhow::Result<Self> {
-        // Connect to PostgreSQL
+        // Runtime processes never receive migration/owner credentials.
         let db = PgPoolOptions::new()
             .max_connections(20)
             .connect(&config.database_url)
             .await?;
-
-        // Run migrations from the workspace migrations directory at runtime.
-        let migrations = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../migrations");
-        sqlx::migrate::Migrator::new(migrations)
-            .await?
-            .run(&db)
+        let auth_db = PgPoolOptions::new()
+            .max_connections(5)
+            .connect(&config.auth_database_url)
+            .await?;
+        #[cfg(feature = "stripe")]
+        let worker_db = PgPoolOptions::new()
+            .max_connections(5)
+            .connect(
+                config
+                    .worker_database_url
+                    .as_deref()
+                    .ok_or_else(|| anyhow::anyhow!("WORKER_DATABASE_URL is required"))?,
+            )
             .await?;
 
         // Connect to Redis
@@ -71,6 +84,9 @@ impl AppState {
         Ok(Self {
             inner: Arc::new(AppStateInner {
                 db,
+                auth_db,
+                #[cfg(feature = "stripe")]
+                worker_db,
                 redis,
                 encryption,
                 jwt_secret: config.jwt_secret.clone(),
@@ -83,9 +99,25 @@ impl AppState {
         })
     }
 
-    /// Get database pool
+    /// Get application database pool. Product-table queries must use `tenant_tx`.
     pub fn db(&self) -> &PgPool {
         &self.inner.db
+    }
+
+    /// Begin one transaction-local tenant scope.
+    pub async fn tenant_tx(&self, tenant_id: uuid::Uuid) -> sqlx::Result<TenantTransaction> {
+        TenantTransaction::begin(&self.inner.db, tenant_id).await
+    }
+
+    /// Get restricted authentication-function pool.
+    pub fn auth_db(&self) -> &PgPool {
+        &self.inner.auth_db
+    }
+
+    /// Get trusted worker pool for webhook processing.
+    #[cfg(feature = "stripe")]
+    pub fn worker_db(&self) -> &PgPool {
+        &self.inner.worker_db
     }
 
     /// Get Redis connection

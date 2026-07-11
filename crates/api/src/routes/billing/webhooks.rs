@@ -68,7 +68,7 @@ pub async fn handle_webhook(
     };
 
     // Check idempotency - skip if already processed
-    let already_processed = check_idempotency(state.db(), event.id.as_ref()).await;
+    let already_processed = check_idempotency(state.worker_db(), event.id.as_ref()).await;
     if already_processed {
         tracing::debug!(event_hash = %safe_ref(event.id.as_ref()), "Webhook event already processed, skipping");
         return StatusCode::OK;
@@ -81,7 +81,13 @@ pub async fn handle_webhook(
     }
 
     // Mark as processed
-    if let Err(e) = mark_processed(state.db(), event.id.as_ref(), &event.type_.to_string()).await {
+    if let Err(e) = mark_processed(
+        state.worker_db(),
+        event.id.as_ref(),
+        &event.type_.to_string(),
+    )
+    .await
+    {
         tracing::error!(event_hash = %safe_ref(event.id.as_ref()), error = %e, "Failed to mark webhook as processed");
     }
 
@@ -118,7 +124,7 @@ async fn mark_processed(
 
 /// Process a Stripe event
 async fn process_event(state: &AppState, event: &Event) -> Result<(), ApiError> {
-    let db = state.db();
+    let db = state.worker_db();
 
     match event.type_ {
         // ====================================================================

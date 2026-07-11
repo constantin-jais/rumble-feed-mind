@@ -7,15 +7,17 @@ services:
     container_name: feedmind-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: feedmind
-      POSTGRES_PASSWORD: feedmind_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_dev
       POSTGRES_DB: feedmind
     ports:
-      - "5434:5432"
+      - "127.0.0.1:5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/postgres/provision-roles.sql:/docker-entrypoint-initdb.d/00-provision-roles.sql:ro
+      - ./scripts/postgres/init-dev-principals.sql:/docker-entrypoint-initdb.d/10-dev-principals.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U feedmind -d feedmind"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d feedmind"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -25,7 +27,7 @@ services:
     container_name: feedmind-redis
     restart: unless-stopped
     ports:
-      - "6380:6379"
+      - "127.0.0.1:6380:6379"
     volumes:
       - redis_data:/data
     healthcheck:

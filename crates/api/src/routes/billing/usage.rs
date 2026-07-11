@@ -38,9 +38,12 @@ pub async fn get_current_usage(
     let stripe = state
         .stripe()
         .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
-    let service = BillingService::new(state.db(), stripe, state.stripe_config());
+    let mut tx = state.tenant_tx(user.id).await?;
+    let mut service = BillingService::new(tx.connection(), stripe, state.stripe_config());
 
     let usage = service.get_current_usage(user.id).await?;
+    service.release();
+    tx.commit().await?;
 
     Ok(Json(DataResponse { data: usage }))
 }
@@ -54,12 +57,15 @@ pub async fn get_usage_history(
     let stripe = state
         .stripe()
         .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
-    let service = BillingService::new(state.db(), stripe, state.stripe_config());
+    let mut tx = state.tenant_tx(user.id).await?;
+    let mut service = BillingService::new(tx.connection(), stripe, state.stripe_config());
 
     // Limit to 90 days
     let days = params.days.min(90);
 
     let history = service.get_usage_history(user.id, days).await?;
+    service.release();
+    tx.commit().await?;
 
     Ok(Json(DataResponse { data: history }))
 }

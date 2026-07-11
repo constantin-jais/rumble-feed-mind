@@ -7,9 +7,9 @@
       "column": "user_id"
     },
     "roles": {
-      "app": ["feedmind"],
-      "readonly": [],
-      "migration": ["feedmind"]
+      "app": ["feed_radar_app", "feed_radar_auth", "feed_radar_worker"],
+      "readonly": ["feed_radar_readonly"],
+      "migration": ["feed_radar_owner"]
     },
     "tables": [
       {

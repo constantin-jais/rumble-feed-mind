@@ -102,6 +102,7 @@ async fn list_articles(
     user: CurrentUser,
     Query(query): Query<ListArticlesQuery>,
 ) -> ApiResult<Json<ArticlesListResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     let limit = query.limit.unwrap_or(50).min(100);
 
     // Build status filter
@@ -156,7 +157,7 @@ async fn list_articles(
             .bind(user.id)
             .bind(feed_id)
             .bind(limit)
-            .fetch_all(state.db())
+            .fetch_all(tx.connection())
             .await
         }
         (_, Some(folder_id)) => {
@@ -177,7 +178,7 @@ async fn list_articles(
             .bind(user.id)
             .bind(folder_id)
             .bind(limit)
-            .fetch_all(state.db())
+            .fetch_all(tx.connection())
             .await
         }
         _ => {
@@ -197,7 +198,7 @@ async fn list_articles(
             ))
             .bind(user.id)
             .bind(limit)
-            .fetch_all(state.db())
+            .fetch_all(tx.connection())
             .await
         }
     }
@@ -208,9 +209,10 @@ async fn list_articles(
         "SELECT COUNT(*) FROM articles WHERE user_id = $1 AND is_hidden = FALSE",
     )
     .bind(user.id)
-    .fetch_one(state.db())
+    .fetch_one(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+    tx.commit().await?;
 
     let has_more = articles.len() as i64 == limit;
 
@@ -230,6 +232,7 @@ async fn get_article(
     user: CurrentUser,
     Path(article_id): Path<Uuid>,
 ) -> ApiResult<Json<ArticleResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     let article: Option<ArticleRow> = sqlx::query_as(
         r#"
         SELECT id, feed_id, url, title, author, summary, content, image_url,
@@ -240,11 +243,12 @@ async fn get_article(
     )
     .bind(article_id)
     .bind(user.id)
-    .fetch_optional(state.db())
+    .fetch_optional(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
     let article = article.ok_or_else(|| ApiError::NotFound("Article not found".to_string()))?;
+    tx.commit().await?;
 
     Ok(Json(ArticleResponse { data: article }))
 }
@@ -279,6 +283,7 @@ async fn update_article(
         return get_article(State(state), user, Path(article_id)).await;
     }
 
+    let mut tx = state.tenant_tx(user.id).await?;
     let query = format!(
         r#"
         UPDATE articles SET {}, updated_at = NOW()
@@ -301,10 +306,11 @@ async fn update_article(
     }
 
     let article = query_builder
-        .fetch_optional(state.db())
+        .fetch_optional(tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
         .ok_or_else(|| ApiError::NotFound("Article not found".to_string()))?;
+    tx.commit().await?;
 
     Ok(Json(ArticleResponse { data: article }))
 }
@@ -325,6 +331,7 @@ async fn batch_update_articles(
         ));
     }
 
+    let mut tx = state.tenant_tx(user.id).await?;
     let mut updated = 0;
 
     if let Some(is_read) = req.is_read {
@@ -339,7 +346,7 @@ async fn batch_update_articles(
         }
         .bind(&req.article_ids)
         .bind(user.id)
-        .execute(state.db())
+        .execute(tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -358,13 +365,14 @@ async fn batch_update_articles(
         }
         .bind(&req.article_ids)
         .bind(user.id)
-        .execute(state.db())
+        .execute(tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
         updated = result.rows_affected() as i64;
     }
 
+    tx.commit().await?;
     Ok(Json(serde_json::json!({
         "data": {
             "updated": updated
@@ -378,13 +386,14 @@ async fn mark_all_read(
     user: CurrentUser,
     Query(query): Query<ListArticlesQuery>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     let result = if let Some(feed_id) = query.feed_id {
         sqlx::query(
             "UPDATE articles SET is_read = TRUE, read_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND feed_id = $2 AND is_read = FALSE"
         )
         .bind(user.id)
         .bind(feed_id)
-        .execute(state.db())
+        .execute(tx.connection())
         .await
     } else if let Some(folder_id) = query.folder_id {
         sqlx::query(
@@ -396,17 +405,18 @@ async fn mark_all_read(
         )
         .bind(user.id)
         .bind(folder_id)
-        .execute(state.db())
+        .execute(tx.connection())
         .await
     } else {
         sqlx::query(
             "UPDATE articles SET is_read = TRUE, read_at = NOW(), updated_at = NOW() WHERE user_id = $1 AND is_read = FALSE"
         )
         .bind(user.id)
-        .execute(state.db())
+        .execute(tx.connection())
         .await
     }
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+    tx.commit().await?;
 
     Ok(Json(serde_json::json!({
         "data": {

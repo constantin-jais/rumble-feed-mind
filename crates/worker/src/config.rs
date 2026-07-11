@@ -6,8 +6,8 @@ use serde::Deserialize;
 /// Worker configuration
 #[derive(Debug, Deserialize)]
 pub struct WorkerConfig {
-    /// Database URL
-    pub database_url: String,
+    /// Dedicated worker-role database URL.
+    pub worker_database_url: String,
 
     /// Redis URL
     pub redis_url: String,
@@ -49,8 +49,8 @@ impl WorkerConfig {
 
         let worker_config: WorkerConfig = config.try_deserialize()?;
 
-        if worker_config.database_url.is_empty() {
-            anyhow::bail!("DATABASE_URL is required");
+        if worker_config.worker_database_url.is_empty() {
+            anyhow::bail!("WORKER_DATABASE_URL is required for the dedicated worker role");
         }
         if worker_config.redis_url.is_empty() {
             anyhow::bail!("REDIS_URL is required");

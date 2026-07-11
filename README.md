@@ -41,9 +41,29 @@ diff -u examples/expected-curated-export.json out/curated.json
 
 The optional `demo-curate-live` command uses the network and is intentionally excluded from deterministic CI.
 
-## Database inspection pilot
+## PostgreSQL tenant isolation
 
-[`db-security-manifest.json`](db-security-manifest.json) classifies every PostgreSQL table and records tenant derivation without granting waivers. Run the inspection locally against the ordered migrations:
+[ADR 0006](docs/adr/0006-tenant-context-and-row-level-security.md) is enforced below the adapters: 18 tenant tables enable and force RLS, API/CLI user work uses transaction-local `app.user_id`, authentication is restricted to fixed-`search_path` functions, and worker access is granted per table without ownership or `BYPASSRLS`.
+
+Local development provisions separate group and login roles on a fresh volume:
+
+```bash
+docker compose down -v # required once when upgrading the former single-role volume
+docker compose up -d
+
+export MIGRATION_DATABASE_URL='postgresql://feed_radar_migrator_dev:feed_radar_migrator_dev@localhost:5434/feedmind?options=-c%20role%3Dfeed_radar_owner'
+export DATABASE_URL='postgresql://feed_radar_app_dev:feed_radar_app_dev@localhost:5434/feedmind?options=-c%20role%3Dfeed_radar_app'
+export AUTH_DATABASE_URL='postgresql://feed_radar_auth_dev:feed_radar_auth_dev@localhost:5434/feedmind?options=-c%20role%3Dfeed_radar_auth'
+export WORKER_DATABASE_URL='postgresql://feed_radar_worker_dev:feed_radar_worker_dev@localhost:5434/feedmind?options=-c%20role%3Dfeed_radar_worker'
+
+cargo run -p feedmind-cli -- migrate
+```
+
+These credentials are local fixtures only. Production creates independent login principals outside product migrations and grants each exactly one NOLOGIN group role from [`scripts/postgres/provision-roles.sql`](scripts/postgres/provision-roles.sql). Existing single-role databases first run the explicit, product-object-only [`transfer-legacy-ownership.sql`](scripts/postgres/transfer-legacy-ownership.sql) as an administrator. API and worker configuration never receives `MIGRATION_DATABASE_URL`.
+
+## Database inspection gate
+
+[`db-security-manifest.json`](db-security-manifest.json) classifies every PostgreSQL table and records tenant derivation without granting waivers. Run the same ordered inspection used in CI:
 
 ```bash
 mkdir -p target/db-inspect
@@ -59,7 +79,7 @@ wrench-db-inspect run \
   --report-json target/db-inspect/report.json
 ```
 
-The SQL corpus has zero parser errors and zero unclassified tables. The protected-branch profile still fails on the existing tenant RLS gaps; this command remains an evidence-producing pilot, not a CI gate, until the role separation, transaction-local tenant context and cross-tenant tests in [ADR 0006](docs/adr/0006-tenant-context-and-row-level-security.md) are implemented. No waiver is accepted for this gap.
+The protected-branch profile passes with zero parser errors, zero unknown state, complete enabled/forced RLS coverage and no waiver. CI downloads the immutable `wrench-db-inspect v0.1.0-alpha.2` Linux archive and verifies SHA-256 before producing JSON and Markdown evidence.
 
 ## Boundaries
 

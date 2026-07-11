@@ -1026,6 +1026,7 @@ dependencies = [
  "feedmind-domain",
  "feedmind-ingest",
  "feedmind-opml",
+ "feedmind-storage",
  "jsonwebtoken",
  "redis",
  "regex",
@@ -1057,6 +1058,7 @@ dependencies = [
  "feedmind-ingest",
  "feedmind-opml",
  "feedmind-rules",
+ "feedmind-storage",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -1166,7 +1168,9 @@ version = "0.1.0"
 dependencies = [
  "feedmind-domain",
  "feedmind-sync",
+ "sqlx",
  "thiserror 2.0.18",
+ "tokio",
  "uuid 1.23.4",
 ]
 
