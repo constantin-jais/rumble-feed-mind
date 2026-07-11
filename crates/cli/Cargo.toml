@@ -20,7 +20,7 @@ feedmind-storage = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 
 # Database
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "macros", "migrate", "postgres", "uuid", "chrono"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls", "macros", "migrate", "postgres", "uuid", "chrono"] }
 
 # CLI
 clap = { version = "4", features = ["derive"] }
