@@ -10,9 +10,9 @@ permissions:
   contents: read
 
 env:
-  WDI_VERSION: db-inspect-v0.1.0-alpha.5
+  WDI_VERSION: db-inspect-v0.1.0-alpha.6
   WDI_ARCHIVE: wrench-db-inspect-x86_64-unknown-linux-gnu.tar.gz
-  WDI_SHA256: f7fd9bf3a87d74c75c1c8969ff4d8c6dc4bee95fd749824ebdf0c499e098b7ef
+  WDI_SHA256: 9c76a9325ff8b334a8da23ede9747761748e34a1725bb5980794ffd0278debc1
 
 jobs:
   protected-branch:
