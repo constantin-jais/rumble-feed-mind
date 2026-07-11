@@ -78,7 +78,7 @@ jsonwebtoken = "10.3"
 
 # Encryption (for API keys)
 aes-gcm = "0.10"
-rand = "0.9"
+rand = "0.10"
 hkdf = "0.13"
 sha2 = "0.11"
 digest = "0.11"
