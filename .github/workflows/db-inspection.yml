@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .tools/wrench-db-inspect target/db-inspect
-          url="https://github.com/libre-ai/wrench/releases/download/${WDI_VERSION}/${WDI_ARCHIVE}"
+          url="https://github.com/libre-ai/proof-kit/releases/download/${WDI_VERSION}/${WDI_ARCHIVE}"
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
             --output "target/db-inspect/${WDI_ARCHIVE}" "$url"
           printf '%s  %s\n' "$WDI_SHA256" "target/db-inspect/${WDI_ARCHIVE}" \
