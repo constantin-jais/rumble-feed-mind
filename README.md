@@ -41,6 +41,26 @@ diff -u examples/expected-curated-export.json out/curated.json
 
 The optional `demo-curate-live` command uses the network and is intentionally excluded from deterministic CI.
 
+## Database inspection pilot
+
+[`db-security-manifest.json`](db-security-manifest.json) classifies every PostgreSQL table and records tenant derivation without granting waivers. Run the inspection locally against the ordered migrations:
+
+```bash
+mkdir -p target/db-inspect
+for migration in migrations/*.sql; do
+  cat "$migration"
+  printf '\n'
+done > target/db-inspect/schema.sql
+
+wrench-db-inspect run \
+  --manifest db-security-manifest.json \
+  --schema-dump target/db-inspect/schema.sql \
+  --profile protected_branch \
+  --report-json target/db-inspect/report.json
+```
+
+The SQL corpus has zero parser errors and zero unclassified tables. The protected-branch profile still fails on the existing tenant RLS gaps; this command remains an evidence-producing pilot, not a CI gate, until those gaps are remediated explicitly.
+
 ## Boundaries
 
 Feed Radar owns subscriptions, user-visible rules, selection decisions and explainable exports. It does not own generic ingestion infrastructure, durable memory, orchestration or shared client primitives. Integrations cross those boundaries through explicit contracts.
