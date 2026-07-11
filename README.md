@@ -59,7 +59,7 @@ wrench-db-inspect run \
   --report-json target/db-inspect/report.json
 ```
 
-The SQL corpus has zero parser errors and zero unclassified tables. The protected-branch profile still fails on the existing tenant RLS gaps; this command remains an evidence-producing pilot, not a CI gate, until those gaps are remediated explicitly.
+The SQL corpus has zero parser errors and zero unclassified tables. The protected-branch profile still fails on the existing tenant RLS gaps; this command remains an evidence-producing pilot, not a CI gate, until the role separation, transaction-local tenant context and cross-tenant tests in [ADR 0006](docs/adr/0006-tenant-context-and-row-level-security.md) are implemented. No waiver is accepted for this gap.
 
 ## Boundaries
 
