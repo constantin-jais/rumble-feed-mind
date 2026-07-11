@@ -82,6 +82,7 @@ async fn list_folders(
     State(state): State<AppState>,
     user: CurrentUser,
 ) -> ApiResult<Json<FoldersListResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     let folders: Vec<FolderRow> = sqlx::query_as(
         r#"
         SELECT
@@ -96,11 +97,12 @@ async fn list_folders(
         "#,
     )
     .bind(user.id)
-    .fetch_all(state.db())
+    .fetch_all(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
     let total = folders.len() as i64;
+    tx.commit().await?;
 
     Ok(Json(FoldersListResponse {
         data: folders,
@@ -116,6 +118,7 @@ async fn create_folder(
 ) -> ApiResult<Json<FolderResponse>> {
     req.validate()
         .map_err(|e| ApiError::Validation(e.to_string()))?;
+    let mut tx = state.tenant_tx(user.id).await?;
 
     // If parent_id is provided, verify it exists and belongs to user
     if let Some(parent_id) = req.parent_id {
@@ -124,7 +127,7 @@ async fn create_folder(
         )
         .bind(parent_id)
         .bind(user.id)
-        .fetch_one(state.db())
+        .fetch_one(tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -146,7 +149,7 @@ async fn create_folder(
     .bind(user.id)
     .bind(&req.name)
     .bind(req.parent_id)
-    .fetch_one(state.db())
+    .fetch_one(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -166,7 +169,7 @@ async fn create_folder(
     )
     .bind(user.id)
     .bind(req.parent_id)
-    .fetch_one(state.db())
+    .fetch_one(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -189,9 +192,10 @@ async fn create_folder(
     .bind(&req.name)
     .bind(req.parent_id)
     .bind(next_position)
-    .fetch_one(state.db())
+    .fetch_one(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to create folder: {}", e)))?;
+    tx.commit().await?;
 
     Ok(Json(FolderResponse { data: folder }))
 }
@@ -202,6 +206,7 @@ async fn get_folder(
     user: CurrentUser,
     Path(folder_id): Path<Uuid>,
 ) -> ApiResult<Json<FolderResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     let folder: Option<FolderRow> = sqlx::query_as(
         r#"
         SELECT
@@ -216,11 +221,12 @@ async fn get_folder(
     )
     .bind(folder_id)
     .bind(user.id)
-    .fetch_optional(state.db())
+    .fetch_optional(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
     let folder = folder.ok_or_else(|| ApiError::NotFound("Folder not found".to_string()))?;
+    tx.commit().await?;
 
     Ok(Json(FolderResponse { data: folder }))
 }
@@ -234,13 +240,14 @@ async fn update_folder(
 ) -> ApiResult<Json<FolderResponse>> {
     req.validate()
         .map_err(|e| ApiError::Validation(e.to_string()))?;
+    let mut tx = state.tenant_tx(user.id).await?;
 
     // Verify folder exists and belongs to user
     let exists: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM folders WHERE id = $1 AND user_id = $2)")
             .bind(folder_id)
             .bind(user.id)
-            .fetch_one(state.db())
+            .fetch_one(tx.connection())
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -262,7 +269,7 @@ async fn update_folder(
         )
         .bind(new_parent_id)
         .bind(user.id)
-        .fetch_one(state.db())
+        .fetch_one(tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -286,7 +293,7 @@ async fn update_folder(
         .bind(folder_id)
         .bind(new_parent_id)
         .bind(user.id)
-        .fetch_one(state.db())
+        .fetch_one(tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -313,7 +320,7 @@ async fn update_folder(
         .bind(new_name)
         .bind(folder_id)
         .bind(target_parent)
-        .fetch_one(state.db())
+        .fetch_one(tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -350,9 +357,10 @@ async fn update_folder(
     .bind(&req.name)
     .bind(req.parent_id)
     .bind(req.position)
-    .fetch_one(state.db())
+    .fetch_one(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to update folder: {}", e)))?;
+    tx.commit().await?;
 
     Ok(Json(FolderResponse { data: folder }))
 }
@@ -363,11 +371,12 @@ async fn delete_folder(
     user: CurrentUser,
     Path(folder_id): Path<Uuid>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     // Delete folder (ON DELETE CASCADE will handle feeds/articles)
     let result = sqlx::query("DELETE FROM folders WHERE id = $1 AND user_id = $2")
         .bind(folder_id)
         .bind(user.id)
-        .execute(state.db())
+        .execute(tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -375,6 +384,7 @@ async fn delete_folder(
         return Err(ApiError::NotFound("Folder not found".to_string()));
     }
 
+    tx.commit().await?;
     Ok(Json(serde_json::json!({ "data": { "success": true } })))
 }
 
@@ -385,12 +395,13 @@ async fn reorder_folder(
     Path(folder_id): Path<Uuid>,
     Json(req): Json<ReorderFolderRequest>,
 ) -> ApiResult<Json<FolderResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     // Get current folder info
     let current: Option<(Option<Uuid>, i32)> =
         sqlx::query_as("SELECT parent_id, position FROM folders WHERE id = $1 AND user_id = $2")
             .bind(folder_id)
             .bind(user.id)
-            .fetch_optional(state.db())
+            .fetch_optional(tx.connection())
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -401,15 +412,9 @@ async fn reorder_folder(
 
     // Skip if position hasn't changed
     if current_position == new_position {
+        tx.rollback().await?;
         return get_folder(State(state), user, Path(folder_id)).await;
     }
-
-    // Start transaction
-    let mut tx = state
-        .db()
-        .begin()
-        .await
-        .map_err(|e| ApiError::Internal(format!("Transaction error: {}", e)))?;
 
     // Shift other folders to make room
     if new_position < current_position {

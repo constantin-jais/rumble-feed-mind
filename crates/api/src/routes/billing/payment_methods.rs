@@ -45,10 +45,13 @@ pub async fn list_payment_methods(
     let stripe = state
         .stripe()
         .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
-    let service = BillingService::new(state.db(), stripe, state.stripe_config());
+    let mut tx = state.tenant_tx(user.id).await?;
+    let mut service = BillingService::new(tx.connection(), stripe, state.stripe_config());
 
     let methods = service.list_payment_methods(user.id).await?;
     let total = methods.len();
+    service.release();
+    tx.commit().await?;
 
     Ok(Json(ListResponse {
         data: methods.into_iter().map(|m| m.into()).collect(),
@@ -65,11 +68,14 @@ pub async fn add_payment_method(
     let stripe = state
         .stripe()
         .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
-    let service = BillingService::new(state.db(), stripe, state.stripe_config());
+    let mut tx = state.tenant_tx(user.id).await?;
+    let mut service = BillingService::new(tx.connection(), stripe, state.stripe_config());
 
     let method = service
         .add_payment_method(user.id, &req.payment_method_id, req.set_default)
         .await?;
+    service.release();
+    tx.commit().await?;
 
     Ok(Json(DataResponse {
         data: method.into(),
@@ -85,9 +91,12 @@ pub async fn delete_payment_method(
     let stripe = state
         .stripe()
         .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
-    let service = BillingService::new(state.db(), stripe, state.stripe_config());
+    let mut tx = state.tenant_tx(user.id).await?;
+    let mut service = BillingService::new(tx.connection(), stripe, state.stripe_config());
 
     service.delete_payment_method(user.id, id).await?;
+    service.release();
+    tx.commit().await?;
 
     Ok(Json(DataResponse {
         data: SuccessResponse { success: true },
@@ -103,9 +112,12 @@ pub async fn set_default_payment_method(
     let stripe = state
         .stripe()
         .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
-    let service = BillingService::new(state.db(), stripe, state.stripe_config());
+    let mut tx = state.tenant_tx(user.id).await?;
+    let mut service = BillingService::new(tx.connection(), stripe, state.stripe_config());
 
     let method = service.set_default_payment_method(user.id, id).await?;
+    service.release();
+    tx.commit().await?;
 
     Ok(Json(DataResponse {
         data: method.into(),

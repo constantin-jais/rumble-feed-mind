@@ -76,11 +76,12 @@ async fn import_opml(
     let doc = OpmlParser::parse_bytes(&content)
         .map_err(|e| ApiError::BadRequest(format!("Invalid OPML: {}", e)))?;
 
-    // Check feed limit
+    // Check and import within one tenant transaction.
+    let mut tx = state.tenant_tx(user.id).await?;
     let current_feed_count: i64 =
         sqlx::query_scalar("SELECT COUNT(*) FROM feeds WHERE user_id = $1")
             .bind(user.id)
-            .fetch_one(state.db())
+            .fetch_one(tx.connection())
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -93,13 +94,6 @@ async fn import_opml(
             current_feed_count, new_feeds_count, max_feeds
         )));
     }
-
-    // Start transaction
-    let mut tx = state
-        .db()
-        .begin()
-        .await
-        .map_err(|e| ApiError::Internal(format!("Transaction error: {}", e)))?;
 
     let mut feeds_imported = 0i64;
     let mut feeds_skipped = 0i64;
@@ -145,7 +139,7 @@ type ImportOutlineFuture<'a> = Pin<Box<dyn Future<Output = ImportOutlineResult> 
 
 /// Recursively import an outline (folder or feed)
 fn import_outline<'a>(
-    tx: &'a mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tx: &'a mut feedmind_storage::TenantTransaction,
     user_id: Uuid,
     outline: &'a OpmlOutline,
     parent_folder_id: Option<Uuid>,
@@ -274,6 +268,7 @@ async fn export_opml(
     State(state): State<AppState>,
     user: CurrentUser,
 ) -> ApiResult<([(header::HeaderName, &'static str); 2], String)> {
+    let mut tx = state.tenant_tx(user.id).await?;
     // Get all folders
     #[derive(sqlx::FromRow)]
     struct FolderForExport {
@@ -286,7 +281,7 @@ async fn export_opml(
         "SELECT id, name, parent_id FROM folders WHERE user_id = $1 ORDER BY parent_id NULLS FIRST, position, name",
     )
     .bind(user.id)
-    .fetch_all(state.db())
+    .fetch_all(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -304,9 +299,10 @@ async fn export_opml(
         "SELECT id, url, title, site_url, folder_id FROM feeds WHERE user_id = $1 ORDER BY position, title",
     )
     .bind(user.id)
-    .fetch_all(state.db())
+    .fetch_all(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+    tx.commit().await?;
 
     // Build OPML document
     let mut doc = OpmlDocument::new(Some("FeedMind Export".to_string()));

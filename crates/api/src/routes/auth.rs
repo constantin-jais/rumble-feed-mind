@@ -85,19 +85,6 @@ async fn register(
 
     let email = req.email.to_lowercase();
 
-    // Check if email exists
-    let exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1 AND deleted_at IS NULL)",
-    )
-    .bind(&email)
-    .fetch_one(state.db())
-    .await
-    .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
-
-    if exists {
-        return Err(ApiError::Conflict("Email already registered".to_string()));
-    }
-
     // Hash password with argon2
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
@@ -109,25 +96,34 @@ async fn register(
     // Create user in database
     let user: UserRow = sqlx::query_as(
         r#"
-        INSERT INTO users (email, password_hash, display_name, tier)
-        VALUES ($1, $2, $3, 'free')
-        RETURNING id, email, password_hash, display_name, tier
+        SELECT id, email, password_hash, display_name, tier
+        FROM feed_radar_auth_register($1, $2, $3)
         "#,
     )
     .bind(&email)
     .bind(&password_hash)
     .bind(&req.display_name)
-    .fetch_one(state.db())
+    .fetch_one(state.auth_db())
     .await
-    .map_err(|e| ApiError::Internal(format!("Failed to create user: {}", e)))?;
+    .map_err(|error| {
+        if error
+            .as_database_error()
+            .and_then(sqlx::error::DatabaseError::code)
+            .is_some_and(|code| code == "23505")
+        {
+            ApiError::Conflict("Email already registered".to_string())
+        } else {
+            ApiError::Internal("Failed to create user".to_string())
+        }
+    })?;
 
     // Generate JWT token
     let (token, expires_at) = generate_jwt(&user, state.jwt_secret(), state.jwt_expiration())?;
 
-    // Update last login
-    let _ = sqlx::query("UPDATE users SET last_login_at = NOW() WHERE id = $1")
+    // Update last login through the reviewed authentication boundary.
+    let _ = sqlx::query("SELECT feed_radar_auth_touch_last_login($1)")
         .bind(user.id)
-        .execute(state.db())
+        .execute(state.auth_db())
         .await;
 
     Ok(Json(AuthResponse {
@@ -157,10 +153,10 @@ async fn login(
 
     // Find user by email
     let user: Option<UserRow> = sqlx::query_as(
-        "SELECT id, email, password_hash, display_name, tier FROM users WHERE email = $1 AND deleted_at IS NULL"
+        "SELECT id, email, password_hash, display_name, tier FROM feed_radar_auth_find_user($1)",
     )
     .bind(&email)
-    .fetch_optional(state.db())
+    .fetch_optional(state.auth_db())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -178,10 +174,10 @@ async fn login(
     // Generate JWT token
     let (token, expires_at) = generate_jwt(&user, state.jwt_secret(), state.jwt_expiration())?;
 
-    // Update last login
-    let _ = sqlx::query("UPDATE users SET last_login_at = NOW() WHERE id = $1")
+    // Update last login through the reviewed authentication boundary.
+    let _ = sqlx::query("SELECT feed_radar_auth_touch_last_login($1)")
         .bind(user.id)
-        .execute(state.db())
+        .execute(state.auth_db())
         .await;
 
     Ok(Json(AuthResponse {
@@ -203,15 +199,17 @@ async fn refresh(
     State(state): State<AppState>,
     claims: crate::extractors::auth::CurrentUser,
 ) -> ApiResult<Json<AuthResponse>> {
-    // Get fresh user data
+    // Get fresh user data inside the JWT tenant boundary.
+    let mut tx = state.tenant_tx(claims.id).await?;
     let user: UserRow = sqlx::query_as(
         "SELECT id, email, password_hash, display_name, tier FROM users WHERE id = $1 AND deleted_at IS NULL"
     )
     .bind(claims.id)
-    .fetch_optional(state.db())
+    .fetch_optional(tx.connection())
     .await
-    .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+    .map_err(|_| ApiError::Internal("Failed to load user".to_string()))?
     .ok_or_else(|| ApiError::Unauthorized("User not found".to_string()))?;
+    tx.commit().await?;
 
     // Generate new JWT token
     let (token, expires_at) = generate_jwt(&user, state.jwt_secret(), state.jwt_expiration())?;
@@ -242,14 +240,16 @@ async fn me(
     State(state): State<AppState>,
     claims: crate::extractors::auth::CurrentUser,
 ) -> ApiResult<Json<serde_json::Value>> {
+    let mut tx = state.tenant_tx(claims.id).await?;
     let user: UserRow = sqlx::query_as(
         "SELECT id, email, password_hash, display_name, tier FROM users WHERE id = $1 AND deleted_at IS NULL"
     )
     .bind(claims.id)
-    .fetch_optional(state.db())
+    .fetch_optional(tx.connection())
     .await
-    .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?
+    .map_err(|_| ApiError::Internal("Failed to load user".to_string()))?
     .ok_or_else(|| ApiError::NotFound("User not found".to_string()))?;
+    tx.commit().await?;
 
     Ok(Json(serde_json::json!({
         "data": {

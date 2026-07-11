@@ -45,6 +45,7 @@ async fn list_categories(
     State(state): State<AppState>,
     user: CurrentUser,
 ) -> ApiResult<Json<CategoriesResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     let categories: Vec<CategoryRow> = sqlx::query_as(
         r#"
         SELECT
@@ -59,9 +60,10 @@ async fn list_categories(
         "#,
     )
     .bind(user.id)
-    .fetch_all(state.db())
+    .fetch_all(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+    tx.commit().await?;
 
     Ok(Json(CategoriesResponse { data: categories }))
 }
@@ -72,12 +74,13 @@ async fn list_feed_categories(
     user: CurrentUser,
     Path(feed_id): Path<Uuid>,
 ) -> ApiResult<Json<FeedCategoriesResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     // Verify ownership
     let exists: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM feeds WHERE id = $1 AND user_id = $2)")
             .bind(feed_id)
             .bind(user.id)
-            .fetch_one(state.db())
+            .fetch_one(tx.connection())
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -94,9 +97,10 @@ async fn list_feed_categories(
         "#,
     )
     .bind(feed_id)
-    .fetch_all(state.db())
+    .fetch_all(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+    tx.commit().await?;
 
     Ok(Json(FeedCategoriesResponse { data: categories }))
 }

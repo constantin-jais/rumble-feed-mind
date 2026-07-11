@@ -1,0 +1,61 @@
+name: db-inspection
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  WDI_VERSION: v0.1.0-alpha.2
+  WDI_ARCHIVE: wrench-db-inspect-x86_64-unknown-linux-gnu.tar.gz
+  WDI_SHA256: 42ab1a37863d9eab54972314752ee01fde20aa6a19dcc37e10cb65dd38cc0f82
+
+jobs:
+  protected-branch:
+    name: Database inspection gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Download pinned wrench-db-inspect release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tools/wrench-db-inspect target/db-inspect
+          url="https://github.com/constantin-jais/wrench-db-inspect/releases/download/${WDI_VERSION}/${WDI_ARCHIVE}"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --output "target/db-inspect/${WDI_ARCHIVE}" "$url"
+          printf '%s  %s\n' "$WDI_SHA256" "target/db-inspect/${WDI_ARCHIVE}" \
+            | sha256sum --check --strict
+          tar -xzf "target/db-inspect/${WDI_ARCHIVE}" -C .tools/wrench-db-inspect
+          .tools/wrench-db-inspect/wrench-db-inspect --help >/dev/null
+      - name: Build ordered PostgreSQL migration corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > target/db-inspect/schema.sql
+          for migration in migrations/*.sql; do
+            cat "$migration" >> target/db-inspect/schema.sql
+            printf '\n' >> target/db-inspect/schema.sql
+          done
+      - name: Inspect PostgreSQL migrations (fail closed)
+        run: |
+          .tools/wrench-db-inspect/wrench-db-inspect run \
+            --manifest db-security-manifest.json \
+            --schema-dump target/db-inspect/schema.sql \
+            --profile protected_branch \
+            --report-json target/db-inspect/report.json \
+            --report-md target/db-inspect/report.md
+      - name: Upload inspection evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wrench-db-inspect-report
+          path: |
+            target/db-inspect/report.json
+            target/db-inspect/report.md
+          if-no-files-found: error
+          retention-days: 14

@@ -102,6 +102,7 @@ async fn list_tags(
     State(state): State<AppState>,
     user: CurrentUser,
 ) -> ApiResult<Json<TagsListResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     let tags: Vec<TagRow> = sqlx::query_as(
         r#"
         SELECT
@@ -115,11 +116,12 @@ async fn list_tags(
         "#,
     )
     .bind(user.id)
-    .fetch_all(state.db())
+    .fetch_all(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
     let total = tags.len() as i64;
+    tx.commit().await?;
 
     Ok(Json(TagsListResponse {
         data: tags,
@@ -148,13 +150,14 @@ async fn create_tag(
     req.validate()
         .map_err(|e| ApiError::Validation(e.to_string()))?;
     validate_color(req.color.as_ref())?;
+    let mut tx = state.tenant_tx(user.id).await?;
 
     // Check for duplicate name
     let duplicate_exists: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tags WHERE user_id = $1 AND name = $2)")
             .bind(user.id)
             .bind(&req.name)
-            .fetch_one(state.db())
+            .fetch_one(tx.connection())
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -181,9 +184,10 @@ async fn create_tag(
     .bind(user.id)
     .bind(&req.name)
     .bind(&req.color)
-    .fetch_one(state.db())
+    .fetch_one(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to create tag: {}", e)))?;
+    tx.commit().await?;
 
     Ok(Json(TagResponse { data: tag }))
 }
@@ -194,6 +198,7 @@ async fn get_tag(
     user: CurrentUser,
     Path(tag_id): Path<Uuid>,
 ) -> ApiResult<Json<TagResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     let tag: Option<TagRow> = sqlx::query_as(
         r#"
         SELECT
@@ -207,11 +212,12 @@ async fn get_tag(
     )
     .bind(tag_id)
     .bind(user.id)
-    .fetch_optional(state.db())
+    .fetch_optional(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
     let tag = tag.ok_or_else(|| ApiError::NotFound("Tag not found".to_string()))?;
+    tx.commit().await?;
 
     Ok(Json(TagResponse { data: tag }))
 }
@@ -226,13 +232,14 @@ async fn update_tag(
     req.validate()
         .map_err(|e| ApiError::Validation(e.to_string()))?;
     validate_color(req.color.as_ref())?;
+    let mut tx = state.tenant_tx(user.id).await?;
 
     // Verify tag exists
     let exists: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tags WHERE id = $1 AND user_id = $2)")
             .bind(tag_id)
             .bind(user.id)
-            .fetch_one(state.db())
+            .fetch_one(tx.connection())
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -248,7 +255,7 @@ async fn update_tag(
         .bind(user.id)
         .bind(new_name)
         .bind(tag_id)
-        .fetch_one(state.db())
+        .fetch_one(tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -281,9 +288,10 @@ async fn update_tag(
     .bind(user.id)
     .bind(&req.name)
     .bind(&req.color)
-    .fetch_one(state.db())
+    .fetch_one(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to update tag: {}", e)))?;
+    tx.commit().await?;
 
     Ok(Json(TagResponse { data: tag }))
 }
@@ -294,10 +302,11 @@ async fn delete_tag(
     user: CurrentUser,
     Path(tag_id): Path<Uuid>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     let result = sqlx::query("DELETE FROM tags WHERE id = $1 AND user_id = $2")
         .bind(tag_id)
         .bind(user.id)
-        .execute(state.db())
+        .execute(tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -305,6 +314,7 @@ async fn delete_tag(
         return Err(ApiError::NotFound("Tag not found".to_string()));
     }
 
+    tx.commit().await?;
     Ok(Json(serde_json::json!({ "data": { "success": true } })))
 }
 
@@ -314,12 +324,13 @@ async fn get_article_tags(
     user: CurrentUser,
     Path(article_id): Path<Uuid>,
 ) -> ApiResult<Json<ArticleTagsResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     // Verify article belongs to user
     let article_exists: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM articles WHERE id = $1 AND user_id = $2)")
             .bind(article_id)
             .bind(user.id)
-            .fetch_one(state.db())
+            .fetch_one(tx.connection())
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -342,9 +353,10 @@ async fn get_article_tags(
         "#,
     )
     .bind(article_id)
-    .fetch_all(state.db())
+    .fetch_all(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+    tx.commit().await?;
 
     Ok(Json(ArticleTagsResponse { data: tags }))
 }
@@ -356,12 +368,13 @@ async fn add_tag_to_article(
     Path(article_id): Path<Uuid>,
     Json(req): Json<AddTagRequest>,
 ) -> ApiResult<Json<ArticleTagsResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     // Verify article belongs to user
     let article_exists: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM articles WHERE id = $1 AND user_id = $2)")
             .bind(article_id)
             .bind(user.id)
-            .fetch_one(state.db())
+            .fetch_one(tx.connection())
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -374,7 +387,7 @@ async fn add_tag_to_article(
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tags WHERE id = $1 AND user_id = $2)")
             .bind(req.tag_id)
             .bind(user.id)
-            .fetch_one(state.db())
+            .fetch_one(tx.connection())
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -392,9 +405,10 @@ async fn add_tag_to_article(
     )
     .bind(article_id)
     .bind(req.tag_id)
-    .execute(state.db())
+    .execute(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to add tag: {}", e)))?;
+    tx.commit().await?;
 
     // Return updated tags list
     get_article_tags(State(state), user, Path(article_id)).await
@@ -406,12 +420,13 @@ async fn remove_tag_from_article(
     user: CurrentUser,
     Path((article_id, tag_id)): Path<(Uuid, Uuid)>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     // Verify article belongs to user
     let article_exists: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM articles WHERE id = $1 AND user_id = $2)")
             .bind(article_id)
             .bind(user.id)
-            .fetch_one(state.db())
+            .fetch_one(tx.connection())
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -422,7 +437,7 @@ async fn remove_tag_from_article(
     let result = sqlx::query("DELETE FROM article_tags WHERE article_id = $1 AND tag_id = $2")
         .bind(article_id)
         .bind(tag_id)
-        .execute(state.db())
+        .execute(tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -432,6 +447,7 @@ async fn remove_tag_from_article(
         ));
     }
 
+    tx.commit().await?;
     Ok(Json(serde_json::json!({ "data": { "success": true } })))
 }
 

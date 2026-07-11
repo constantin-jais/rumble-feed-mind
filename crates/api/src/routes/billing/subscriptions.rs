@@ -28,9 +28,12 @@ pub async fn get_subscription(
     let stripe = state
         .stripe()
         .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
-    let service = BillingService::new(state.db(), stripe, state.stripe_config());
+    let mut tx = state.tenant_tx(user.id).await?;
+    let mut service = BillingService::new(tx.connection(), stripe, state.stripe_config());
 
     let sub = service.get_subscription(user.id).await?;
+    service.release();
+    tx.commit().await?;
 
     Ok(Json(DataResponse {
         data: sub.map(|s| s.into()),
@@ -46,7 +49,8 @@ pub async fn create_subscription(
     let stripe = state
         .stripe()
         .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
-    let service = BillingService::new(state.db(), stripe, state.stripe_config());
+    let mut tx = state.tenant_tx(user.id).await?;
+    let mut service = BillingService::new(tx.connection(), stripe, state.stripe_config());
 
     // Check if user already has an active subscription
     if let Some(existing) = service.get_subscription(user.id).await? {
@@ -67,6 +71,8 @@ pub async fn create_subscription(
             req.payment_method_id,
         )
         .await?;
+    service.release();
+    tx.commit().await?;
 
     Ok(Json(DataResponse { data: sub.into() }))
 }
@@ -80,11 +86,14 @@ pub async fn change_plan(
     let stripe = state
         .stripe()
         .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
-    let service = BillingService::new(state.db(), stripe, state.stripe_config());
+    let mut tx = state.tenant_tx(user.id).await?;
+    let mut service = BillingService::new(tx.connection(), stripe, state.stripe_config());
 
     let sub = service
         .change_plan(user.id, req.plan, req.interval, req.prorate)
         .await?;
+    service.release();
+    tx.commit().await?;
 
     Ok(Json(DataResponse { data: sub.into() }))
 }
@@ -98,11 +107,14 @@ pub async fn cancel_subscription(
     let stripe = state
         .stripe()
         .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
-    let service = BillingService::new(state.db(), stripe, state.stripe_config());
+    let mut tx = state.tenant_tx(user.id).await?;
+    let mut service = BillingService::new(tx.connection(), stripe, state.stripe_config());
 
     let sub = service
         .cancel_subscription(user.id, req.reason, req.immediate)
         .await?;
+    service.release();
+    tx.commit().await?;
 
     Ok(Json(DataResponse { data: sub.into() }))
 }
@@ -115,9 +127,12 @@ pub async fn reactivate_subscription(
     let stripe = state
         .stripe()
         .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
-    let service = BillingService::new(state.db(), stripe, state.stripe_config());
+    let mut tx = state.tenant_tx(user.id).await?;
+    let mut service = BillingService::new(tx.connection(), stripe, state.stripe_config());
 
     let sub = service.reactivate_subscription(user.id).await?;
+    service.release();
+    tx.commit().await?;
 
     Ok(Json(DataResponse { data: sub.into() }))
 }
@@ -131,12 +146,15 @@ pub async fn create_portal_session(
     let stripe_client = state
         .stripe()
         .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
-    let service = BillingService::new(state.db(), stripe_client, state.stripe_config());
+    let mut tx = state.tenant_tx(user.id).await?;
+    let mut service = BillingService::new(tx.connection(), stripe_client, state.stripe_config());
 
     // Get or create Stripe customer
     let customer = service
         .get_or_create_stripe_customer(user.id, &user.email, None)
         .await?;
+    service.release();
+    tx.commit().await?;
 
     // Create portal session
     let customer_id = stripe::CustomerId::from_str(&customer.stripe_customer_id)
@@ -162,7 +180,8 @@ pub async fn create_checkout_session(
     let stripe_client = state
         .stripe()
         .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
-    let service = BillingService::new(state.db(), stripe_client, state.stripe_config());
+    let mut tx = state.tenant_tx(user.id).await?;
+    let mut service = BillingService::new(tx.connection(), stripe_client, state.stripe_config());
     let config = state.stripe_config();
 
     // Get plan and interval
@@ -191,6 +210,8 @@ pub async fn create_checkout_session(
     let customer = service
         .get_or_create_stripe_customer(user.id, &user.email, None)
         .await?;
+    service.release();
+    tx.commit().await?;
 
     // Create checkout session
     let customer_id = stripe::CustomerId::from_str(&customer.stripe_customer_id)

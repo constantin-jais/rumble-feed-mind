@@ -234,6 +234,7 @@ async fn list_rules(
     user: CurrentUser,
     Query(query): Query<ListRulesQuery>,
 ) -> ApiResult<Json<RulesListResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     let rules: Vec<RuleRow> = if let Some(feed_id) = query.feed_id {
         sqlx::query_as(
             r#"
@@ -247,7 +248,7 @@ async fn list_rules(
         )
         .bind(user.id)
         .bind(feed_id)
-        .fetch_all(state.db())
+        .fetch_all(tx.connection())
         .await
     } else if let Some(folder_id) = query.folder_id {
         sqlx::query_as(
@@ -262,7 +263,7 @@ async fn list_rules(
         )
         .bind(user.id)
         .bind(folder_id)
-        .fetch_all(state.db())
+        .fetch_all(tx.connection())
         .await
     } else if let Some(is_active) = query.is_active {
         sqlx::query_as(
@@ -277,7 +278,7 @@ async fn list_rules(
         )
         .bind(user.id)
         .bind(is_active)
-        .fetch_all(state.db())
+        .fetch_all(tx.connection())
         .await
     } else {
         sqlx::query_as(
@@ -291,12 +292,13 @@ async fn list_rules(
             "#,
         )
         .bind(user.id)
-        .fetch_all(state.db())
+        .fetch_all(tx.connection())
         .await
     }
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
     let total = rules.len() as i64;
+    tx.commit().await?;
 
     Ok(Json(RulesListResponse {
         data: rules,
@@ -317,11 +319,12 @@ async fn create_rule(
     validate_action(&action)?;
     validate_config(&req.config)?;
     validate_action_params(&action, req.action_params.as_ref())?;
+    let mut tx = state.tenant_tx(user.id).await?;
 
     // Check rule limit
     let rule_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM rules WHERE user_id = $1")
         .bind(user.id)
-        .fetch_one(state.db())
+        .fetch_one(tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -339,7 +342,7 @@ async fn create_rule(
             sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM feeds WHERE id = $1 AND user_id = $2)")
                 .bind(feed_id)
                 .bind(user.id)
-                .fetch_one(state.db())
+                .fetch_one(tx.connection())
                 .await
                 .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -355,7 +358,7 @@ async fn create_rule(
         )
         .bind(folder_id)
         .bind(user.id)
-        .fetch_one(state.db())
+        .fetch_one(tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -392,9 +395,10 @@ async fn create_rule(
     .bind(req.folder_id)
     .bind(priority)
     .bind(stop_on_match)
-    .fetch_one(state.db())
+    .fetch_one(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to create rule: {}", e)))?;
+    tx.commit().await?;
 
     Ok(Json(RuleResponse { data: rule }))
 }
@@ -405,6 +409,7 @@ async fn get_rule(
     user: CurrentUser,
     Path(rule_id): Path<Uuid>,
 ) -> ApiResult<Json<RuleResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     let rule: Option<RuleRow> = sqlx::query_as(
         r#"
         SELECT id, name, description, rule_type, config, action, action_params,
@@ -416,11 +421,12 @@ async fn get_rule(
     )
     .bind(rule_id)
     .bind(user.id)
-    .fetch_optional(state.db())
+    .fetch_optional(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
     let rule = rule.ok_or_else(|| ApiError::NotFound("Rule not found".to_string()))?;
+    tx.commit().await?;
 
     Ok(Json(RuleResponse { data: rule }))
 }
@@ -432,12 +438,13 @@ async fn update_rule(
     Path(rule_id): Path<Uuid>,
     Json(req): Json<UpdateRuleRequest>,
 ) -> ApiResult<Json<RuleResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     // Verify rule exists
     let existing: Option<RuleRow> =
         sqlx::query_as("SELECT * FROM rules WHERE id = $1 AND user_id = $2")
             .bind(rule_id)
             .bind(user.id)
-            .fetch_optional(state.db())
+            .fetch_optional(tx.connection())
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -496,9 +503,10 @@ async fn update_rule(
     .bind(req.priority)
     .bind(req.stop_on_match)
     .bind(req.is_active)
-    .fetch_one(state.db())
+    .fetch_one(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to update rule: {}", e)))?;
+    tx.commit().await?;
 
     Ok(Json(RuleResponse { data: rule }))
 }
@@ -509,10 +517,11 @@ async fn delete_rule(
     user: CurrentUser,
     Path(rule_id): Path<Uuid>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     let result = sqlx::query("DELETE FROM rules WHERE id = $1 AND user_id = $2")
         .bind(rule_id)
         .bind(user.id)
-        .execute(state.db())
+        .execute(tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -520,6 +529,7 @@ async fn delete_rule(
         return Err(ApiError::NotFound("Rule not found".to_string()));
     }
 
+    tx.commit().await?;
     Ok(Json(serde_json::json!({ "data": { "success": true } })))
 }
 
@@ -530,6 +540,7 @@ async fn toggle_rule(
     Path(rule_id): Path<Uuid>,
     Json(req): Json<ToggleRuleRequest>,
 ) -> ApiResult<Json<RuleResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     let rule: Option<RuleRow> = sqlx::query_as(
         r#"
         UPDATE rules SET is_active = $3, updated_at = NOW()
@@ -542,11 +553,12 @@ async fn toggle_rule(
     .bind(rule_id)
     .bind(user.id)
     .bind(req.is_active)
-    .fetch_optional(state.db())
+    .fetch_optional(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
     let rule = rule.ok_or_else(|| ApiError::NotFound("Rule not found".to_string()))?;
+    tx.commit().await?;
 
     Ok(Json(RuleResponse { data: rule }))
 }
@@ -558,6 +570,7 @@ async fn preview_rule(
     Json(req): Json<PreviewRuleRequest>,
 ) -> ApiResult<Json<PreviewResponse>> {
     let re = validate_config(&req.config)?;
+    let mut tx = state.tenant_tx(user.id).await?;
 
     // Get recent articles (last 7 days)
     let seven_days_ago = Utc::now() - Duration::days(7);
@@ -587,7 +600,7 @@ async fn preview_rule(
         .bind(feed_id)
         .bind(seven_days_ago)
         .bind(limit as i64)
-        .fetch_all(state.db())
+        .fetch_all(tx.connection())
         .await
     } else if let Some(folder_id) = req.folder_id {
         sqlx::query_as(
@@ -604,7 +617,7 @@ async fn preview_rule(
         .bind(folder_id)
         .bind(seven_days_ago)
         .bind(limit as i64)
-        .fetch_all(state.db())
+        .fetch_all(tx.connection())
         .await
     } else {
         sqlx::query_as(
@@ -619,10 +632,11 @@ async fn preview_rule(
         .bind(user.id)
         .bind(seven_days_ago)
         .bind(limit as i64)
-        .fetch_all(state.db())
+        .fetch_all(tx.connection())
         .await
     }
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+    tx.commit().await?;
 
     let total_articles = articles.len() as i64;
     let mut matched_articles = 0i64;
@@ -682,12 +696,7 @@ async fn reorder_rules(
     user: CurrentUser,
     Json(req): Json<ReorderRulesRequest>,
 ) -> ApiResult<Json<RulesListResponse>> {
-    // Start transaction
-    let mut tx = state
-        .db()
-        .begin()
-        .await
-        .map_err(|e| ApiError::Internal(format!("Transaction error: {}", e)))?;
+    let mut tx = state.tenant_tx(user.id).await?;
 
     // Update priorities in order (highest priority first)
     for (index, rule_id) in req.rule_ids.iter().enumerate() {

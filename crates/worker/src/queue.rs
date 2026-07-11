@@ -53,7 +53,7 @@ impl QueueConsumer {
         // Connect to PostgreSQL
         let db = PgPoolOptions::new()
             .max_connections(10)
-            .connect(&config.database_url)
+            .connect(&config.worker_database_url)
             .await?;
 
         // Connect to Redis

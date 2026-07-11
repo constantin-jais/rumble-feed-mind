@@ -53,13 +53,16 @@ pub async fn list_invoices(
     let stripe = state
         .stripe()
         .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
-    let service = BillingService::new(state.db(), stripe, state.stripe_config());
+    let mut tx = state.tenant_tx(user.id).await?;
+    let mut service = BillingService::new(tx.connection(), stripe, state.stripe_config());
 
     // Limit to 100 max
     let limit = params.limit.min(100);
 
     let invoices = service.list_invoices(user.id, limit).await?;
     let total = invoices.len();
+    service.release();
+    tx.commit().await?;
 
     Ok(Json(ListResponse {
         data: invoices.into_iter().map(|i| i.into()).collect(),
@@ -76,9 +79,12 @@ pub async fn get_invoice(
     let stripe = state
         .stripe()
         .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
-    let service = BillingService::new(state.db(), stripe, state.stripe_config());
+    let mut tx = state.tenant_tx(user.id).await?;
+    let mut service = BillingService::new(tx.connection(), stripe, state.stripe_config());
 
     let invoice = service.get_invoice(user.id, id).await?;
+    service.release();
+    tx.commit().await?;
 
     Ok(Json(DataResponse {
         data: invoice.into(),
@@ -94,13 +100,16 @@ pub async fn get_invoice_pdf(
     let stripe = state
         .stripe()
         .ok_or_else(|| ApiError::BadRequest("Billing not enabled".to_string()))?;
-    let service = BillingService::new(state.db(), stripe, state.stripe_config());
+    let mut tx = state.tenant_tx(user.id).await?;
+    let mut service = BillingService::new(tx.connection(), stripe, state.stripe_config());
 
     let invoice = service.get_invoice(user.id, id).await?;
 
     let pdf_url = invoice
         .invoice_pdf
         .ok_or_else(|| ApiError::NotFound("Invoice PDF not available".to_string()))?;
+    service.release();
+    tx.commit().await?;
 
     Ok(Redirect::temporary(&pdf_url))
 }

@@ -3,7 +3,7 @@
 use std::str::FromStr;
 
 use chrono::{DateTime, Datelike, Utc};
-use sqlx::PgPool;
+use sqlx::PgConnection;
 use stripe::Client as StripeClient;
 use uuid::Uuid;
 
@@ -13,15 +13,22 @@ use crate::error::{ApiError, ApiResult};
 
 /// Billing service handles all billing operations
 pub struct BillingService<'a> {
-    db: &'a PgPool,
+    db: &'a mut PgConnection,
     stripe: &'a StripeClient,
     config: &'a StripeConfig,
 }
 
 impl<'a> BillingService<'a> {
-    pub fn new(db: &'a PgPool, stripe: &'a StripeClient, config: &'a StripeConfig) -> Self {
+    pub fn new(
+        db: &'a mut PgConnection,
+        stripe: &'a StripeClient,
+        config: &'a StripeConfig,
+    ) -> Self {
         Self { db, stripe, config }
     }
+
+    /// Consume the service and release its transaction connection borrow.
+    pub fn release(self) {}
 
     // ========================================================================
     // STRIPE CUSTOMER MANAGEMENT
@@ -29,7 +36,7 @@ impl<'a> BillingService<'a> {
 
     /// Get or create a Stripe customer for a user
     pub async fn get_or_create_stripe_customer(
-        &self,
+        &mut self,
         user_id: Uuid,
         email: &str,
         name: Option<&str>,
@@ -67,7 +74,7 @@ impl<'a> BillingService<'a> {
         .bind(stripe_customer.id.to_string())
         .bind(email)
         .bind(name)
-        .fetch_one(self.db)
+        .fetch_one(&mut *self.db)
         .await?;
 
         // Log event
@@ -86,14 +93,14 @@ impl<'a> BillingService<'a> {
 
     /// Get Stripe customer by user ID
     pub async fn get_stripe_customer_by_user(
-        &self,
+        &mut self,
         user_id: Uuid,
     ) -> ApiResult<Option<StripeCustomer>> {
         let customer = sqlx::query_as::<_, StripeCustomer>(
             "SELECT * FROM stripe_customers WHERE user_id = $1",
         )
         .bind(user_id)
-        .fetch_optional(self.db)
+        .fetch_optional(&mut *self.db)
         .await?;
 
         Ok(customer)
@@ -104,7 +111,7 @@ impl<'a> BillingService<'a> {
     // ========================================================================
 
     /// Get active subscription for user
-    pub async fn get_subscription(&self, user_id: Uuid) -> ApiResult<Option<Subscription>> {
+    pub async fn get_subscription(&mut self, user_id: Uuid) -> ApiResult<Option<Subscription>> {
         let sub = sqlx::query_as::<_, Subscription>(
             r#"
             SELECT * FROM subscriptions
@@ -114,7 +121,7 @@ impl<'a> BillingService<'a> {
             "#,
         )
         .bind(user_id)
-        .fetch_optional(self.db)
+        .fetch_optional(&mut *self.db)
         .await?;
 
         Ok(sub)
@@ -122,7 +129,7 @@ impl<'a> BillingService<'a> {
 
     /// Create a new subscription
     pub async fn create_subscription(
-        &self,
+        &mut self,
         user_id: Uuid,
         email: &str,
         name: Option<&str>,
@@ -182,7 +189,7 @@ impl<'a> BillingService<'a> {
 
     /// Change subscription plan
     pub async fn change_plan(
-        &self,
+        &mut self,
         user_id: Uuid,
         new_plan: PlanTier,
         new_interval: BillingInterval,
@@ -222,7 +229,7 @@ impl<'a> BillingService<'a> {
         .bind(new_interval)
         .bind(&price_id)
         .bind(sub.id)
-        .fetch_one(self.db)
+        .fetch_one(&mut *self.db)
         .await?;
 
         // Update user tier
@@ -245,7 +252,7 @@ impl<'a> BillingService<'a> {
 
     /// Cancel subscription
     pub async fn cancel_subscription(
-        &self,
+        &mut self,
         user_id: Uuid,
         reason: Option<String>,
         immediate: bool,
@@ -279,7 +286,7 @@ impl<'a> BillingService<'a> {
             )
             .bind(&reason)
             .bind(sub.id)
-            .fetch_one(self.db)
+            .fetch_one(&mut *self.db)
             .await?;
 
             // Downgrade user to free
@@ -306,7 +313,7 @@ impl<'a> BillingService<'a> {
             )
             .bind(&reason)
             .bind(sub.id)
-            .fetch_one(self.db)
+            .fetch_one(&mut *self.db)
             .await?;
 
             Ok(updated)
@@ -314,7 +321,7 @@ impl<'a> BillingService<'a> {
     }
 
     /// Reactivate a canceled subscription
-    pub async fn reactivate_subscription(&self, user_id: Uuid) -> ApiResult<Subscription> {
+    pub async fn reactivate_subscription(&mut self, user_id: Uuid) -> ApiResult<Subscription> {
         let sub = self
             .get_subscription(user_id)
             .await?
@@ -347,7 +354,7 @@ impl<'a> BillingService<'a> {
             "#,
         )
         .bind(sub.id)
-        .fetch_one(self.db)
+        .fetch_one(&mut *self.db)
         .await?;
 
         // Log event
@@ -368,7 +375,7 @@ impl<'a> BillingService<'a> {
 
     /// Record usage
     pub async fn record_usage(
-        &self,
+        &mut self,
         user_id: Uuid,
         usage_type: UsageType,
         quantity: i64,
@@ -388,7 +395,7 @@ impl<'a> BillingService<'a> {
         .bind(usage_type)
         .bind(quantity)
         .bind(metadata)
-        .fetch_one(self.db)
+        .fetch_one(&mut *self.db)
         .await?;
 
         // Update daily aggregate
@@ -412,14 +419,14 @@ impl<'a> BillingService<'a> {
         .bind(today)
         .bind(tokens_delta)
         .bind(calls_delta)
-        .execute(self.db)
+        .execute(&mut *self.db)
         .await?;
 
         Ok(record)
     }
 
     /// Get current period usage
-    pub async fn get_current_usage(&self, user_id: Uuid) -> ApiResult<CurrentUsageResponse> {
+    pub async fn get_current_usage(&mut self, user_id: Uuid) -> ApiResult<CurrentUsageResponse> {
         let sub = self.get_subscription(user_id).await?;
         let limits = self.get_user_limits(user_id).await?;
 
@@ -452,7 +459,7 @@ impl<'a> BillingService<'a> {
         .bind(user_id)
         .bind(period_start.date_naive())
         .bind(period_end.date_naive())
-        .fetch_one(self.db)
+        .fetch_one(&mut *self.db)
         .await?;
 
         let ai_used = usage.0.unwrap_or(0);
@@ -484,7 +491,7 @@ impl<'a> BillingService<'a> {
 
     /// Get usage history
     pub async fn get_usage_history(
-        &self,
+        &mut self,
         user_id: Uuid,
         days: u32,
     ) -> ApiResult<Vec<UsageHistoryEntry>> {
@@ -499,7 +506,7 @@ impl<'a> BillingService<'a> {
         )
         .bind(user_id)
         .bind(start_date)
-        .fetch_all(self.db)
+        .fetch_all(&mut *self.db)
         .await?;
 
         Ok(history
@@ -517,7 +524,7 @@ impl<'a> BillingService<'a> {
     // ========================================================================
 
     /// List invoices for user
-    pub async fn list_invoices(&self, user_id: Uuid, limit: u32) -> ApiResult<Vec<Invoice>> {
+    pub async fn list_invoices(&mut self, user_id: Uuid, limit: u32) -> ApiResult<Vec<Invoice>> {
         let invoices = sqlx::query_as::<_, Invoice>(
             r#"
             SELECT * FROM invoices
@@ -528,19 +535,19 @@ impl<'a> BillingService<'a> {
         )
         .bind(user_id)
         .bind(limit as i64)
-        .fetch_all(self.db)
+        .fetch_all(&mut *self.db)
         .await?;
 
         Ok(invoices)
     }
 
     /// Get single invoice
-    pub async fn get_invoice(&self, user_id: Uuid, invoice_id: Uuid) -> ApiResult<Invoice> {
+    pub async fn get_invoice(&mut self, user_id: Uuid, invoice_id: Uuid) -> ApiResult<Invoice> {
         let invoice =
             sqlx::query_as::<_, Invoice>("SELECT * FROM invoices WHERE id = $1 AND user_id = $2")
                 .bind(invoice_id)
                 .bind(user_id)
-                .fetch_optional(self.db)
+                .fetch_optional(&mut *self.db)
                 .await?
                 .ok_or_else(|| ApiError::NotFound("Invoice".to_string()))?;
 
@@ -552,12 +559,12 @@ impl<'a> BillingService<'a> {
     // ========================================================================
 
     /// List payment methods for user
-    pub async fn list_payment_methods(&self, user_id: Uuid) -> ApiResult<Vec<PaymentMethod>> {
+    pub async fn list_payment_methods(&mut self, user_id: Uuid) -> ApiResult<Vec<PaymentMethod>> {
         let methods = sqlx::query_as::<_, PaymentMethod>(
             "SELECT * FROM payment_methods WHERE user_id = $1 ORDER BY is_default DESC, created_at DESC",
         )
         .bind(user_id)
-        .fetch_all(self.db)
+        .fetch_all(&mut *self.db)
         .await?;
 
         Ok(methods)
@@ -565,7 +572,7 @@ impl<'a> BillingService<'a> {
 
     /// Add payment method
     pub async fn add_payment_method(
-        &self,
+        &mut self,
         user_id: Uuid,
         stripe_pm_id: &str,
         set_default: bool,
@@ -613,7 +620,7 @@ impl<'a> BillingService<'a> {
         if set_default {
             sqlx::query("UPDATE payment_methods SET is_default = FALSE WHERE user_id = $1")
                 .bind(user_id)
-                .execute(self.db)
+                .execute(&mut *self.db)
                 .await?;
 
             // Update default in Stripe
@@ -650,20 +657,20 @@ impl<'a> BillingService<'a> {
         .bind(exp_month)
         .bind(exp_year)
         .bind(set_default)
-        .fetch_one(self.db)
+        .fetch_one(&mut *self.db)
         .await?;
 
         Ok(method)
     }
 
     /// Delete payment method
-    pub async fn delete_payment_method(&self, user_id: Uuid, method_id: Uuid) -> ApiResult<()> {
+    pub async fn delete_payment_method(&mut self, user_id: Uuid, method_id: Uuid) -> ApiResult<()> {
         let method = sqlx::query_as::<_, PaymentMethod>(
             "SELECT * FROM payment_methods WHERE id = $1 AND user_id = $2",
         )
         .bind(method_id)
         .bind(user_id)
-        .fetch_optional(self.db)
+        .fetch_optional(&mut *self.db)
         .await?
         .ok_or_else(|| ApiError::NotFound("Payment method".to_string()))?;
 
@@ -678,7 +685,7 @@ impl<'a> BillingService<'a> {
         // Delete from database
         sqlx::query("DELETE FROM payment_methods WHERE id = $1")
             .bind(method_id)
-            .execute(self.db)
+            .execute(&mut *self.db)
             .await?;
 
         Ok(())
@@ -686,7 +693,7 @@ impl<'a> BillingService<'a> {
 
     /// Set payment method as default
     pub async fn set_default_payment_method(
-        &self,
+        &mut self,
         user_id: Uuid,
         method_id: Uuid,
     ) -> ApiResult<PaymentMethod> {
@@ -695,7 +702,7 @@ impl<'a> BillingService<'a> {
         )
         .bind(method_id)
         .bind(user_id)
-        .fetch_optional(self.db)
+        .fetch_optional(&mut *self.db)
         .await?
         .ok_or_else(|| ApiError::NotFound("Payment method".to_string()))?;
 
@@ -725,7 +732,7 @@ impl<'a> BillingService<'a> {
         // Update in database
         sqlx::query("UPDATE payment_methods SET is_default = FALSE WHERE user_id = $1")
             .bind(user_id)
-            .execute(self.db)
+            .execute(&mut *self.db)
             .await?;
 
         let updated = sqlx::query_as::<_, PaymentMethod>(
@@ -736,7 +743,7 @@ impl<'a> BillingService<'a> {
             "#,
         )
         .bind(method_id)
-        .fetch_one(self.db)
+        .fetch_one(&mut *self.db)
         .await?;
 
         Ok(updated)
@@ -747,7 +754,7 @@ impl<'a> BillingService<'a> {
     // ========================================================================
 
     /// Get price ID for plan and interval
-    fn get_price_id(&self, plan: PlanTier, interval: BillingInterval) -> ApiResult<String> {
+    fn get_price_id(&mut self, plan: PlanTier, interval: BillingInterval) -> ApiResult<String> {
         let price_id = match (plan, interval) {
             (PlanTier::Pro, BillingInterval::Month) => self.config.stripe_price_pro_monthly.clone(),
             (PlanTier::Pro, BillingInterval::Year) => self.config.stripe_price_pro_annual.clone(),
@@ -788,7 +795,7 @@ impl<'a> BillingService<'a> {
 
     /// Store subscription in database
     async fn store_subscription(
-        &self,
+        &mut self,
         customer: &StripeCustomer,
         stripe_sub: &stripe::Subscription,
         plan: PlanTier,
@@ -851,27 +858,27 @@ impl<'a> BillingService<'a> {
         .bind(stripe_sub.trial_start.and_then(|ts| DateTime::from_timestamp(ts, 0)))
         .bind(stripe_sub.trial_end.and_then(|ts| DateTime::from_timestamp(ts, 0)))
         .bind(stripe_sub.cancel_at_period_end)
-        .fetch_one(self.db)
+        .fetch_one(&mut *self.db)
         .await?;
 
         Ok(sub)
     }
 
     /// Update user tier
-    async fn update_user_tier(&self, user_id: Uuid, tier: PlanTier) -> ApiResult<()> {
+    async fn update_user_tier(&mut self, user_id: Uuid, tier: PlanTier) -> ApiResult<()> {
         sqlx::query("UPDATE users SET tier = $1, updated_at = NOW() WHERE id = $2")
             .bind(tier.as_str())
             .bind(user_id)
-            .execute(self.db)
+            .execute(&mut *self.db)
             .await?;
         Ok(())
     }
 
     /// Get user limits based on tier
-    async fn get_user_limits(&self, user_id: Uuid) -> ApiResult<PlanLimits> {
+    async fn get_user_limits(&mut self, user_id: Uuid) -> ApiResult<PlanLimits> {
         let tier: (String,) = sqlx::query_as("SELECT tier FROM users WHERE id = $1")
             .bind(user_id)
-            .fetch_one(self.db)
+            .fetch_one(&mut *self.db)
             .await?;
 
         Ok(get_plan_limits(PlanTier::from_str(&tier.0)))
@@ -879,7 +886,7 @@ impl<'a> BillingService<'a> {
 
     /// Log billing event
     async fn log_billing_event(
-        &self,
+        &mut self,
         user_id: Uuid,
         event_type: &str,
         stripe_event_id: Option<&str>,
@@ -895,7 +902,7 @@ impl<'a> BillingService<'a> {
         .bind(event_type)
         .bind(stripe_event_id)
         .bind(payload)
-        .execute(self.db)
+        .execute(&mut *self.db)
         .await?;
         Ok(())
     }

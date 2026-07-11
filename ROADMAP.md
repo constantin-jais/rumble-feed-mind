@@ -7,7 +7,7 @@ This is a contribution map, not a startup roadmap or a delivery promise. It show
 - make dogfooding evidence visible through commands, fixtures, CI checks, generated reports, or linked docs;
 - stabilize runtime tests and feed fixtures;
 - improve classification logs;
-- implement the role separation, transaction-local tenant context and RLS isolation tests from ADR 0006;
+- maintain the separated-role, transaction-local tenant and forced-RLS guarantees from ADR 0006;
 - document advisory waivers and known limits;
 - keep Rust CI, security, and release checks green.
 

@@ -265,7 +265,7 @@ const MAX_ARTICLES_PER_FEED: i64 = 200;
 
 /// Enforce article retention limit - delete oldest articles beyond limit
 async fn enforce_article_retention(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    tx: &mut sqlx::PgConnection,
     feed_id: Uuid,
     user_id: Uuid,
 ) -> Result<i64, sqlx::Error> {
@@ -285,7 +285,7 @@ async fn enforce_article_retention(
     .bind(feed_id)
     .bind(user_id)
     .bind(MAX_ARTICLES_PER_FEED)
-    .execute(&mut **tx)
+    .execute(&mut *tx)
     .await?;
 
     Ok(result.rows_affected() as i64)
@@ -307,12 +307,14 @@ async fn create_feed(
     // Normalize the URL (add https:// if missing)
     let normalized_url = normalize_url(&req.url);
 
-    // Check feed limit
+    // Check feed limit in a short tenant transaction before network I/O.
+    let mut preflight_tx = state.tenant_tx(user.id).await?;
     let feed_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM feeds WHERE user_id = $1")
         .bind(user.id)
-        .fetch_one(state.db())
+        .fetch_one(preflight_tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+    preflight_tx.commit().await?;
 
     if feed_count >= user.tier.max_feeds() as i64 {
         return Err(ApiError::Forbidden(format!(
@@ -343,12 +345,13 @@ async fn create_feed(
         }
     };
 
-    // Check if feed URL already exists for user
+    // Check uniqueness and write atomically inside the tenant boundary.
+    let mut tx = state.tenant_tx(user.id).await?;
     let exists: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM feeds WHERE user_id = $1 AND url = $2)")
             .bind(user.id)
             .bind(&feed_url)
-            .fetch_one(state.db())
+            .fetch_one(tx.connection())
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -367,13 +370,6 @@ async fn create_feed(
     let title = req.title.unwrap_or(feed_meta.title);
     let feed_type_str = feed_meta.feed_type.to_string();
     let icon_url = generate_icon_url(feed_meta.site_url.as_ref());
-
-    // Start transaction
-    let mut tx = state
-        .db()
-        .begin()
-        .await
-        .map_err(|e| ApiError::Internal(format!("Transaction error: {}", e)))?;
 
     // Insert feed
     let feed: FeedRow = sqlx::query_as(
@@ -466,6 +462,7 @@ async fn list_feeds(
     user: CurrentUser,
     Query(query): Query<ListFeedsQuery>,
 ) -> ApiResult<Json<FeedsListResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     let limit = query.limit.unwrap_or(50).min(100);
 
     let feeds: Vec<FeedRow> = if let Some(folder_id) = query.folder_id {
@@ -483,7 +480,7 @@ async fn list_feeds(
         .bind(user.id)
         .bind(folder_id)
         .bind(limit)
-        .fetch_all(state.db())
+        .fetch_all(tx.connection())
         .await
     } else {
         sqlx::query_as(
@@ -499,16 +496,17 @@ async fn list_feeds(
         )
         .bind(user.id)
         .bind(limit)
-        .fetch_all(state.db())
+        .fetch_all(tx.connection())
         .await
     }
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
     let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM feeds WHERE user_id = $1")
         .bind(user.id)
-        .fetch_one(state.db())
+        .fetch_one(tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
+    tx.commit().await?;
 
     let has_more = feeds.len() as i64 == limit;
 
@@ -528,6 +526,7 @@ async fn get_feed(
     user: CurrentUser,
     Path(feed_id): Path<Uuid>,
 ) -> ApiResult<Json<FeedResponse>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     let feed: Option<FeedRow> = sqlx::query_as(
         r#"
         SELECT id, url, title, description, site_url, icon_url, feed_type, priority,
@@ -539,11 +538,12 @@ async fn get_feed(
     )
     .bind(feed_id)
     .bind(user.id)
-    .fetch_optional(state.db())
+    .fetch_optional(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
     let feed = feed.ok_or_else(|| ApiError::NotFound("Feed not found".to_string()))?;
+    tx.commit().await?;
 
     Ok(Json(FeedResponse { data: feed }))
 }
@@ -558,12 +558,13 @@ async fn update_feed(
     req.validate()
         .map_err(|e| ApiError::Validation(e.to_string()))?;
 
+    let mut tx = state.tenant_tx(user.id).await?;
     // Verify ownership
     let exists: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM feeds WHERE id = $1 AND user_id = $2)")
             .bind(feed_id)
             .bind(user.id)
-            .fetch_one(state.db())
+            .fetch_one(tx.connection())
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -607,9 +608,10 @@ async fn update_feed(
     .bind(req.folder_id)
     .bind(&req.priority)
     .bind(&category_filter_json)
-    .fetch_one(state.db())
+    .fetch_one(tx.connection())
     .await
     .map_err(|e| ApiError::Internal(format!("Failed to update feed: {}", e)))?;
+    tx.commit().await?;
 
     Ok(Json(FeedResponse { data: feed }))
 }
@@ -620,10 +622,11 @@ async fn delete_feed(
     user: CurrentUser,
     Path(feed_id): Path<Uuid>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     let result = sqlx::query("DELETE FROM feeds WHERE id = $1 AND user_id = $2")
         .bind(feed_id)
         .bind(user.id)
-        .execute(state.db())
+        .execute(tx.connection())
         .await
         .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -631,6 +634,7 @@ async fn delete_feed(
         return Err(ApiError::NotFound("Feed not found".to_string()));
     }
 
+    tx.commit().await?;
     Ok(Json(serde_json::json!({ "data": { "success": true } })))
 }
 
@@ -640,12 +644,13 @@ async fn refresh_feed(
     user: CurrentUser,
     Path(feed_id): Path<Uuid>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    let mut tx = state.tenant_tx(user.id).await?;
     // Verify ownership
     let exists: bool =
         sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM feeds WHERE id = $1 AND user_id = $2)")
             .bind(feed_id)
             .bind(user.id)
-            .fetch_one(state.db())
+            .fetch_one(tx.connection())
             .await
             .map_err(|e| ApiError::Internal(format!("Database error: {}", e)))?;
 
@@ -653,7 +658,9 @@ async fn refresh_feed(
         return Err(ApiError::NotFound("Feed not found".to_string()));
     }
 
-    // Queue fetch job
+    tx.commit().await?;
+
+    // Queue fetch job only after the ownership transaction is closed.
     let mut redis = state.redis();
     let job = serde_json::json!({
         "id": Uuid::new_v4().to_string(),

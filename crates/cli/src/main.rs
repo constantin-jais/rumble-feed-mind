@@ -39,8 +39,8 @@ enum Commands {
         #[arg(short, long)]
         email: String,
 
-        /// User password (only used if creating new user)
-        #[arg(short, long, default_value = "changeme123")]
+        /// User password used to authenticate or create the account
+        #[arg(short, long)]
         password: String,
     },
 
@@ -49,6 +49,10 @@ enum Commands {
         /// User email to export feeds for
         #[arg(short, long)]
         email: String,
+
+        /// User password used to authenticate the tenant
+        #[arg(short, long)]
+        password: String,
 
         /// Output file path
         #[arg(short, long)]
@@ -70,7 +74,10 @@ enum Commands {
         tier: String,
     },
 
-    /// Show database statistics
+    /// Apply database migrations using the dedicated migration/owner principal
+    Migrate,
+
+    /// Show database statistics using the explicit operator principal
     Stats,
 
     /// Parse an OPML file and print a JSON summary without requiring a database
@@ -195,43 +202,51 @@ async fn main() -> Result<()> {
         Commands::ValidateCuratedExport { file } => {
             validate_curated_export(&file)?;
         }
-        command => {
-            let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
-            let pool = PgPoolOptions::new()
-                .max_connections(5)
-                .connect(&database_url)
-                .await
-                .context("Failed to connect to database")?;
-
-            match command {
-                Commands::Import {
-                    file,
-                    email,
-                    password,
-                } => {
-                    import_opml(&pool, &file, &email, &password).await?;
-                }
-                Commands::Export { email, output } => {
-                    export_opml(&pool, &email, &output).await?;
-                }
-                Commands::CreateUser {
-                    email,
-                    password,
-                    tier,
-                } => {
-                    create_user(&pool, &email, &password, &tier).await?;
-                }
-                Commands::Stats => {
-                    show_stats(&pool).await?;
-                }
-                Commands::OpmlSummary { .. }
-                | Commands::FetchFeed { .. }
-                | Commands::EvaluateRule { .. }
-                | Commands::DemoCurate { .. }
-                | Commands::DemoCurateLive { .. }
-                | Commands::ValidateCuratedExport { .. } => unreachable!("handled before DB setup"),
+        command => match command {
+            Commands::Import {
+                file,
+                email,
+                password,
+            } => {
+                let app_pool = connect_pool("DATABASE_URL").await?;
+                let auth_pool = connect_pool("AUTH_DATABASE_URL").await?;
+                import_opml(&app_pool, &auth_pool, &file, &email, &password).await?;
             }
-        }
+            Commands::Export {
+                email,
+                password,
+                output,
+            } => {
+                let app_pool = connect_pool("DATABASE_URL").await?;
+                let auth_pool = connect_pool("AUTH_DATABASE_URL").await?;
+                export_opml(&app_pool, &auth_pool, &email, &password, &output).await?;
+            }
+            Commands::CreateUser {
+                email,
+                password,
+                tier,
+            } => {
+                let owner_pool = connect_pool("MIGRATION_DATABASE_URL").await?;
+                create_user(&owner_pool, &email, &password, &tier).await?;
+            }
+            Commands::Migrate => {
+                let owner_pool = connect_pool("MIGRATION_DATABASE_URL").await?;
+                sqlx::migrate!("../../migrations")
+                    .run(&owner_pool)
+                    .await
+                    .context("Failed to apply database migrations")?;
+            }
+            Commands::Stats => {
+                let owner_pool = connect_pool("MIGRATION_DATABASE_URL").await?;
+                show_stats(&owner_pool).await?;
+            }
+            Commands::OpmlSummary { .. }
+            | Commands::FetchFeed { .. }
+            | Commands::EvaluateRule { .. }
+            | Commands::DemoCurate { .. }
+            | Commands::DemoCurateLive { .. }
+            | Commands::ValidateCuratedExport { .. } => unreachable!("handled before DB setup"),
+        },
     }
 
     Ok(())
@@ -923,8 +938,19 @@ fn flatten_outlines(outlines: &[OpmlOutline], parent_folder: Option<&str>) -> Ve
     feeds
 }
 
+async fn connect_pool(variable: &str) -> Result<sqlx::PgPool> {
+    let database_url =
+        std::env::var(variable).with_context(|| format!("{variable} must be set"))?;
+    PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+        .with_context(|| format!("Failed to connect using {variable}"))
+}
+
 async fn import_opml(
     pool: &sqlx::PgPool,
+    auth_pool: &sqlx::PgPool,
     file: &PathBuf,
     email: &str,
     password: &str,
@@ -950,7 +976,10 @@ async fn import_opml(
     );
 
     // Get or create user
-    let user_id = get_or_create_user(pool, email, password).await?;
+    let user_id = get_or_create_user(auth_pool, email, password).await?;
+    let mut tx = feedmind_storage::TenantTransaction::begin(pool, user_id)
+        .await
+        .context("Failed to establish tenant context")?;
     info!(user_id_hash = %sha256_tag(user_id.as_bytes()), "User context initialized");
 
     // Create folders and feeds
@@ -964,7 +993,7 @@ async fn import_opml(
             if let Some(id) = folder_map.get(folder_name) {
                 Some(*id)
             } else {
-                let folder_id = create_folder(pool, user_id, folder_name).await?;
+                let folder_id = create_folder(tx.connection(), user_id, folder_name).await?;
                 folder_map.insert(folder_name.clone(), folder_id);
                 Some(folder_id)
             }
@@ -974,7 +1003,7 @@ async fn import_opml(
 
         // Create feed (skip if already exists)
         match create_feed(
-            pool,
+            tx.connection(),
             user_id,
             folder_id,
             &feed.title,
@@ -995,6 +1024,8 @@ async fn import_opml(
         }
     }
 
+    tx.commit().await.context("Failed to commit OPML import")?;
+
     info!(
         "Import complete: {} feeds created, {} skipped (duplicates), {} folders created",
         feeds_created,
@@ -1005,22 +1036,26 @@ async fn import_opml(
     Ok(())
 }
 
-async fn export_opml(pool: &sqlx::PgPool, email: &str, output: &PathBuf) -> Result<()> {
+async fn export_opml(
+    pool: &sqlx::PgPool,
+    auth_pool: &sqlx::PgPool,
+    email: &str,
+    password: &str,
+    output: &PathBuf,
+) -> Result<()> {
     info!(email_hash = %sha256_tag(email.as_bytes()), output = ?output, "Exporting OPML");
 
     // Get user ID
-    let user_id: Uuid =
-        sqlx::query_scalar("SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL")
-            .bind(email)
-            .fetch_one(pool)
-            .await
-            .context("User not found")?;
+    let user_id = authenticate_user(auth_pool, email, password).await?;
+    let mut tx = feedmind_storage::TenantTransaction::begin(pool, user_id)
+        .await
+        .context("Failed to establish tenant context")?;
 
     // Get folders
     let folders: Vec<(Uuid, String)> =
         sqlx::query_as("SELECT id, name FROM folders WHERE user_id = $1 ORDER BY name")
             .bind(user_id)
-            .fetch_all(pool)
+            .fetch_all(tx.connection())
             .await?;
 
     // Get feeds
@@ -1028,8 +1063,11 @@ async fn export_opml(pool: &sqlx::PgPool, email: &str, output: &PathBuf) -> Resu
         "SELECT title, url, site_url, folder_id FROM feeds WHERE user_id = $1 ORDER BY title",
     )
     .bind(user_id)
-    .fetch_all(pool)
+    .fetch_all(tx.connection())
     .await?;
+    tx.commit()
+        .await
+        .context("Failed to close tenant context")?;
 
     // Build folder map
     let folder_map: HashMap<Uuid, String> = folders.into_iter().collect();
@@ -1132,15 +1170,37 @@ async fn show_stats(pool: &sqlx::PgPool) -> Result<()> {
     Ok(())
 }
 
+fn verify_password_hash(password: &str, password_hash: &str) -> Result<()> {
+    use argon2::{password_hash::PasswordHash, Argon2, PasswordVerifier};
+
+    let parsed = PasswordHash::new(password_hash)
+        .map_err(|_| anyhow::anyhow!("Invalid email or password"))?;
+    Argon2::default()
+        .verify_password(password.as_bytes(), &parsed)
+        .map_err(|_| anyhow::anyhow!("Invalid email or password"))
+}
+
+async fn authenticate_user(pool: &sqlx::PgPool, email: &str, password: &str) -> Result<Uuid> {
+    let (user_id, password_hash): (Uuid, String) =
+        sqlx::query_as("SELECT id, password_hash FROM feed_radar_auth_find_user($1)")
+            .bind(email)
+            .fetch_one(pool)
+            .await
+            .context("Invalid email or password")?;
+    verify_password_hash(password, &password_hash)?;
+    Ok(user_id)
+}
+
 async fn get_or_create_user(pool: &sqlx::PgPool, email: &str, password: &str) -> Result<Uuid> {
-    // Try to get existing user
-    let existing: Option<Uuid> =
-        sqlx::query_scalar("SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL")
+    // Authenticate an existing user before selecting their tenant context.
+    let existing: Option<(Uuid, String)> =
+        sqlx::query_as("SELECT id, password_hash FROM feed_radar_auth_find_user($1)")
             .bind(email)
             .fetch_optional(pool)
             .await?;
 
-    if let Some(id) = existing {
+    if let Some((id, password_hash)) = existing {
+        verify_password_hash(password, &password_hash)?;
         return Ok(id);
     }
 
@@ -1157,30 +1217,28 @@ async fn get_or_create_user(pool: &sqlx::PgPool, email: &str, password: &str) ->
         .map_err(|e| anyhow::anyhow!("Failed to hash password: {}", e))?
         .to_string();
 
-    let user_id: Uuid = sqlx::query_scalar(
-        r#"
-        INSERT INTO users (email, password_hash, tier)
-        VALUES ($1, $2, 'free')
-        RETURNING id
-        "#,
-    )
-    .bind(email)
-    .bind(&password_hash)
-    .fetch_one(pool)
-    .await?;
+    let user_id: Uuid = sqlx::query_scalar("SELECT id FROM feed_radar_auth_register($1, $2, NULL)")
+        .bind(email)
+        .bind(&password_hash)
+        .fetch_one(pool)
+        .await?;
 
     info!(email_hash = %sha256_tag(email.as_bytes()), user_id_hash = %sha256_tag(user_id.to_string().as_bytes()), "Created new user");
 
     Ok(user_id)
 }
 
-async fn create_folder(pool: &sqlx::PgPool, user_id: Uuid, name: &str) -> Result<Uuid> {
+async fn create_folder(
+    connection: &mut sqlx::PgConnection,
+    user_id: Uuid,
+    name: &str,
+) -> Result<Uuid> {
     // Try to get existing folder
     let existing: Option<Uuid> =
         sqlx::query_scalar("SELECT id FROM folders WHERE user_id = $1 AND name = $2")
             .bind(user_id)
             .bind(name)
-            .fetch_optional(pool)
+            .fetch_optional(&mut *connection)
             .await?;
 
     if let Some(id) = existing {
@@ -1192,14 +1250,14 @@ async fn create_folder(pool: &sqlx::PgPool, user_id: Uuid, name: &str) -> Result
         sqlx::query_scalar("INSERT INTO folders (user_id, name) VALUES ($1, $2) RETURNING id")
             .bind(user_id)
             .bind(name)
-            .fetch_one(pool)
+            .fetch_one(&mut *connection)
             .await?;
 
     Ok(folder_id)
 }
 
 async fn create_feed(
-    pool: &sqlx::PgPool,
+    connection: &mut sqlx::PgConnection,
     user_id: Uuid,
     folder_id: Option<Uuid>,
     title: &str,
@@ -1218,7 +1276,7 @@ async fn create_feed(
     .bind(title)
     .bind(feed_url)
     .bind(site_url)
-    .fetch_one(pool)
+    .fetch_one(&mut *connection)
     .await?;
 
     Ok(feed_id)

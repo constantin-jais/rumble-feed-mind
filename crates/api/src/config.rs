@@ -14,8 +14,15 @@ pub struct AppConfig {
     #[serde(default = "default_port")]
     pub port: u16,
 
-    /// Database URL
+    /// Application-role database URL. This principal must not own tables.
     pub database_url: String,
+
+    /// Authentication-role database URL, restricted to reviewed functions.
+    pub auth_database_url: String,
+
+    /// Worker-role database URL used only by trusted webhook paths.
+    #[serde(default)]
+    pub worker_database_url: Option<String>,
 
     /// Redis URL
     pub redis_url: String,
@@ -127,7 +134,18 @@ impl AppConfig {
 
         // Validate required fields
         if app_config.database_url.is_empty() {
-            anyhow::bail!("DATABASE_URL is required");
+            anyhow::bail!("DATABASE_URL is required for the application role");
+        }
+        if app_config.auth_database_url.is_empty() {
+            anyhow::bail!("AUTH_DATABASE_URL is required for the authentication role");
+        }
+        if app_config.billing_enabled()
+            && app_config
+                .worker_database_url
+                .as_deref()
+                .is_none_or(str::is_empty)
+        {
+            anyhow::bail!("WORKER_DATABASE_URL is required when Stripe webhooks are enabled");
         }
         if app_config.redis_url.is_empty() {
             anyhow::bail!("REDIS_URL is required");

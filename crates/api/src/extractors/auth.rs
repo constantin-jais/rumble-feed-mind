@@ -79,15 +79,22 @@ impl FromRequestParts<AppState> for CurrentUser {
         // Parse tier
         let tier = UserTier::from_str(&claims.tier);
 
-        // Get account status from database (cached in JWT would be stale)
+        // Get account status inside a transaction-local tenant boundary.
+        let mut tx = state
+            .tenant_tx(user_id)
+            .await
+            .map_err(|_| ApiError::Internal("Failed to establish tenant context".to_string()))?;
         let account_status = sqlx::query_scalar::<_, AccountStatus>(
             "SELECT account_status FROM users WHERE id = $1",
         )
         .bind(user_id)
-        .fetch_optional(state.db())
+        .fetch_optional(tx.connection())
         .await
         .map_err(|_| ApiError::Internal("Failed to check account status".to_string()))?
-        .unwrap_or(AccountStatus::Active);
+        .ok_or_else(|| ApiError::Unauthorized("User no longer exists".to_string()))?;
+        tx.commit()
+            .await
+            .map_err(|_| ApiError::Internal("Failed to close tenant context".to_string()))?;
 
         // Check if suspended - allow only read operations and billing
         if account_status == AccountStatus::Suspended {
