@@ -79,7 +79,7 @@ wrench-db-inspect run \
   --report-json target/db-inspect/report.json
 ```
 
-The protected-branch profile passes with zero parser errors, zero unknown state, complete enabled/forced RLS coverage and no waiver. CI downloads the immutable `wrench-db-inspect v0.1.0-alpha.2` Linux archive and verifies SHA-256 before producing JSON and Markdown evidence.
+The protected-branch profile passes with zero parser errors, zero unknown state, complete enabled/forced RLS coverage and no waiver. CI downloads the immutable `wrench-db-inspect` Linux archive from the consolidated Wrench release `db-inspect-v0.1.0-alpha.5` and verifies SHA-256 before producing JSON and Markdown evidence.
 
 ## Boundaries
 

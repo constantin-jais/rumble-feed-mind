@@ -10,9 +10,9 @@ permissions:
   contents: read
 
 env:
-  WDI_VERSION: v0.1.0-alpha.2
+  WDI_VERSION: db-inspect-v0.1.0-alpha.5
   WDI_ARCHIVE: wrench-db-inspect-x86_64-unknown-linux-gnu.tar.gz
-  WDI_SHA256: 42ab1a37863d9eab54972314752ee01fde20aa6a19dcc37e10cb65dd38cc0f82
+  WDI_SHA256: f7fd9bf3a87d74c75c1c8969ff4d8c6dc4bee95fd749824ebdf0c499e098b7ef
 
 jobs:
   protected-branch:
@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .tools/wrench-db-inspect target/db-inspect
-          url="https://github.com/constantin-jais/wrench-db-inspect/releases/download/${WDI_VERSION}/${WDI_ARCHIVE}"
+          url="https://github.com/libre-ai/wrench/releases/download/${WDI_VERSION}/${WDI_ARCHIVE}"
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
             --output "target/db-inspect/${WDI_ARCHIVE}" "$url"
           printf '%s  %s\n' "$WDI_SHA256" "target/db-inspect/${WDI_ARCHIVE}" \

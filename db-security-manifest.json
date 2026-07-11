@@ -4,7 +4,8 @@
     "product": "feed-radar",
     "tenant": {
       "canonical_name": "user",
-      "column": "user_id"
+      "column": "user_id",
+      "setting": "app.user_id"
     },
     "roles": {
       "app": ["feed_radar_app", "feed_radar_auth", "feed_radar_worker"],
