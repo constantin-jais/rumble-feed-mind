@@ -2,7 +2,7 @@
 
 **Deadline:** 2026-09-30 (blocker for R2 maturity claim)
 
-Five RustSec advisories are currently waived in `deny.toml`. This plan identifies resolution actions for each, with concrete milestones to eliminate waivers before the deadline.
+Three RustSec advisories remain waived in `deny.toml`. This plan preserves the original inventory and records completed removals with concrete evidence.
 
 ## Summary Table
 
@@ -11,10 +11,10 @@ Five RustSec advisories are currently waived in `deny.toml`. This plan identifie
 | RUSTSEC-2025-0057 | fxhash → scraper                        | Hash DoS / collision attack                   | Upgrade scraper to v0.23+ (if available) or replace with alternative HTML parser                           | pending | 2026-08-15 |
 | RUSTSEC-2026-0174 | http-types → async-stripe               | Protocol or security issue in http-types      | Upgrade async-stripe ≥ 0.40 (if available) or migrate to reqwest native HTTP                               | pending | 2026-08-15 |
 | RUSTSEC-2024-0384 | instant → async-stripe path dependency  | Timing or platform issue in instant crate     | Resolved by async-stripe upgrade or explicit instant patch                                                 | pending | 2026-08-15 |
-| RUSTSEC-2024-0436 | paste → validator, or UI dep chain      | Macro expansion or compile-time vulnerability | Upgrade validator to v0.20+ (if available) or isolate behind optional feature flag                         | pending | 2026-08-30 |
-| RUSTSEC-2026-0173 | proc-macro-error2 → UI/validator derive | Procedural macro safety issue                 | Upgrade validator or replace with alternative validation library; isolate UI behind feature gate if needed | pending | 2026-08-30 |
-| RUSTSEC-2026-0194 | quick-xml 0.37 → feed-rs 2.3 | NsReader unbounded allocation (quick-xml #970) | Bump feed-rs as soon as a release depends on quick-xml >=0.41; no upstream fix released as of 2026-07-02 | pending | 2026-09-30 |
-| RUSTSEC-2026-0195 | quick-xml 0.37 → feed-rs 2.3 | Same dependency tree as 0194 | Resolved together with RUSTSEC-2026-0194 via the feed-rs bump | pending | 2026-09-30 |
+| RUSTSEC-2024-0436 | paste → validator, or UI dep chain      | Macro expansion or compile-time vulnerability | Upgraded validator to 0.20; `paste` absent from the locked graph                                          | resolved | 2026-07-09 |
+| RUSTSEC-2026-0173 | proc-macro-error2 → UI/validator derive | Unmaintained procedural macro                 | Updated `validator_derive` to 0.20.1, which uses maintained `proc-macro-error3`                            | resolved | 2026-07-12 |
+| RUSTSEC-2026-0194 | quick-xml 0.37 → feed-rs 2.3 | NsReader unbounded allocation (quick-xml #970) | Updated to feed-rs 2.4.0 and quick-xml 0.41.0                                                             | resolved | 2026-07-09 |
+| RUSTSEC-2026-0195 | quick-xml 0.37 → feed-rs 2.3 | Same dependency tree as 0194                  | Resolved with the same feed-rs/quick-xml update                                                            | resolved | 2026-07-09 |
 
 ## Detailed Resolution Plan
 
@@ -99,10 +99,10 @@ Five RustSec advisories are currently waived in `deny.toml`. This plan identifie
 - **Option B (fallback):** Move UI and validation behind feature gates to isolate proc-macro-error2 exposure.
 - **Option C (deep isolation):** Use manual validation without derive macros for critical paths if replacement not available.
 
-**Action:** Coordinate with RUSTSEC-2024-0436 resolution. If validator upgrade not sufficient, evaluate garde or feature-gate isolation by 2026-08-30.
+**Resolution (2026-07-12):** `validator_derive 0.20.1` moved the derive path to maintained `proc-macro-error3`. The locked graph no longer contains `proc-macro-error2`, and the waiver was removed.
 
 **Owner:** domain + api + worker crate maintainers
-**Milestone:** 2026-08-30
+**Milestone:** completed 2026-07-12
 
 ---
 
@@ -112,8 +112,9 @@ Five RustSec advisories are currently waived in `deny.toml`. This plan identifie
 
 - [ ] Check scraper v0.23+ availability; upgrade if available.
 - [ ] Check async-stripe 0.40+ availability; upgrade if available.
-- [ ] Update [workspace.dependencies] with available patches.
-- [ ] Re-run `cargo deny check` to confirm resolution count.
+- [x] Update the validator derive path to `validator_derive 0.20.1`.
+- [x] Re-run `cargo deny check` and remove `RUSTSEC-2026-0173`.
+- [ ] Update the remaining scraper and async-stripe paths when safe replacements are available.
 
 ### Phase 2: Fallback strategies (by 2026-08-30)
 
