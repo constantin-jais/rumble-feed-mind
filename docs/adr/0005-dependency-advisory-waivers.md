@@ -4,6 +4,8 @@
 
 Accepted temporary waiver. Expires: **2026-09-30**.
 
+Resolution update (2026-07-12): `validator_derive 0.20.1` replaces `proc-macro-error2` with maintained `proc-macro-error3`; the `RUSTSEC-2026-0173` waiver is removed. The original decision table remains as the historical acceptance record.
+
 ## Context
 
 `cargo deny check advisories` reports advisories through transitive dependencies:
@@ -32,7 +34,7 @@ This waiver does **not** authorize:
 
 1. Replace/remove the optional `async-stripe` adapter or move to a safer payment adapter (covers RUSTSEC-2026-0174, 2024-0384, 2026-0097). Default/core build isolation is complete, but all-features audit still requires the waiver.
 2. Evaluate replacing `scraper` or its affected transitive path (RUSTSEC-2025-0057).
-3. Upgrade or replace UI/validator dependencies pulling unmaintained proc-macro crates (RUSTSEC-2026-0173).
+3. ~~Upgrade or replace UI/validator dependencies pulling unmaintained proc-macro crates (RUSTSEC-2026-0173).~~ Resolved by `validator_derive 0.20.1` on 2026-07-12.
 4. Resolve `quick-xml` advisories via upstream patch or safe version constraint (RUSTSEC-2026-0194, 2026-0195); deadline 2026-09-30.
 5. Remove advisory ignores when fixed.
 

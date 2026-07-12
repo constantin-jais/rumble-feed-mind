@@ -11,7 +11,6 @@ ignore = [
   "RUSTSEC-2025-0057", # fxhash via scraper → deferred to Q3 2026 (docs/investigation/scraper-alternatives.md); review by 2026-08-31
   "RUSTSEC-2026-0174", # http-types via optional async-stripe feature → isolated from default/core builds; replace/remove adapter before waiver expiry
   "RUSTSEC-2024-0384", # instant via optional async-stripe feature → isolated from default/core builds; replace/remove adapter before waiver expiry
-  "RUSTSEC-2026-0173", # proc-macro-error2 via UI/validator → active in validator; upstream no patch available (cargo update tested)
 ]
 
 [licenses]
