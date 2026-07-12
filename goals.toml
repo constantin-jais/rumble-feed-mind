@@ -123,8 +123,8 @@ name = "apps/web-rs Leptos spike (retired — evidence in docs/spikes/, Dioxus i
 status = "done"
 
 [[phases.phase_4.sub_milestones]]
-id = "desktop-tauri"
-name = "apps/desktop Tauri 2"
+id = "dioxus-product-proof"
+name = "Premier parcours produit Dioxus runnable et vérifiable (après contrats UI Portal)"
 status = "pending"
 
 [[phases.phase_4.sub_milestones]]
@@ -160,15 +160,15 @@ target = 0
 lower_is_better = true
 
 [[observability]]
-id = "core_tests"
+id = "workspace_tests"
 name = "Tests Rust workspace"
-value = 38
-target = 38
+value = 45
+target = 45
 lower_is_better = false
 
 [[observability]]
-id = "frontend_legacy_warnings"
-name = "Warnings lint Next legacy"
-value = 17
+id = "legacy_ui_workspace_members"
+name = "Surfaces UI legacy dans le workspace"
+value = 0
 target = 0
 lower_is_better = true
