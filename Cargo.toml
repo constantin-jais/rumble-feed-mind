@@ -65,7 +65,7 @@ config = "0.14"
 dotenvy = "0.15"
 
 # UUID
-uuid = { version = "1.11", features = ["v4", "serde"] }
+uuid = { version = "1.11", features = ["v4", "serde", "js"] }
 
 # Date/Time
 chrono = { version = "0.4", features = ["serde"] }

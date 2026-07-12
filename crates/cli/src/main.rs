@@ -17,6 +17,11 @@ use feedmind_domain::DecisionOutcome;
 use feedmind_ingest::FeedFetcher;
 use feedmind_opml::{OpmlDocument, OpmlExporter, OpmlOutline, OpmlParser};
 use feedmind_rules::RuleEvaluator;
+use feedmind_sync::curated::{
+    CuratedArtifactRef, CuratedExportConstraints, CuratedExportCuration, CuratedExportItem,
+    CuratedItemExport, CuratedProvenanceRef, CuratedRuleEvidence, CuratedSourceRef,
+    CURATED_ITEM_EXPORT_FORMAT, CURATED_ITEM_EXPORT_ORIGIN, CURATED_ITEM_EXPORT_PURPOSE,
+};
 
 #[derive(Parser)]
 #[command(name = "feedmind-cli")]
@@ -327,90 +332,6 @@ struct RuleInput {
     stop_on_match: Option<bool>,
 }
 
-#[derive(Serialize)]
-struct CuratedItemExport {
-    format: &'static str,
-    export_id: String,
-    origin_product: &'static str,
-    workspace_id: String,
-    created_by: String,
-    created_at: String,
-    purpose: &'static str,
-    privacy_classification: &'static str,
-    item: CuratedExportItem,
-    source_ref: CuratedSourceRef,
-    curation: CuratedExportCuration,
-    rule_evidence: Vec<CuratedRuleEvidence>,
-    constraints: CuratedExportConstraints,
-    artifact_ref: CuratedArtifactRef,
-    provenance_ref: CuratedProvenanceRef,
-}
-
-#[derive(Serialize)]
-struct CuratedExportItem {
-    item_id: String,
-    title: String,
-    content_excerpt: String,
-    content_hash: String,
-    source_url_hash: String,
-    published_at: Option<String>,
-    tags: Vec<String>,
-}
-
-#[derive(Serialize)]
-struct CuratedSourceRef {
-    source_id: String,
-    source_type: &'static str,
-    origin_product: &'static str,
-    content_hash: String,
-    provenance_id: String,
-    opml_title: Option<String>,
-    opml_feed_count: usize,
-    first_feed_title: Option<String>,
-}
-
-#[derive(Serialize)]
-struct CuratedExportCuration {
-    decision: &'static str,
-    reason: String,
-    curated_by: String,
-    curated_at: String,
-}
-
-#[derive(Serialize)]
-struct CuratedRuleEvidence {
-    rule_id: String,
-    decision: &'static str,
-    explanation: String,
-    evidence_hash: String,
-    confidence: f32,
-}
-
-#[derive(Serialize)]
-struct CuratedExportConstraints {
-    contains_raw_private_content: bool,
-    contains_secrets: bool,
-    contains_byok_material: bool,
-    allow_downstream_execution: bool,
-    data_residency: &'static str,
-    retention_policy_ref: &'static str,
-}
-
-#[derive(Serialize)]
-struct CuratedArtifactRef {
-    artifact_id: String,
-    artifact_type: &'static str,
-    hash: String,
-    manifest_ref: &'static str,
-}
-
-#[derive(Serialize)]
-struct CuratedProvenanceRef {
-    provenance_id: String,
-    operation: &'static str,
-    timestamp: String,
-}
-
 /// Flattened feed info for import
 struct FlatFeed {
     title: String,
@@ -625,6 +546,9 @@ async fn select_live_article(
 }
 
 fn write_curated_export(output: &PathBuf, export: &CuratedItemExport) -> Result<()> {
+    export
+        .validate_client_safe()
+        .context("Refusing to write a CuratedItemExport that is not client-safe")?;
     let json = format!("{}\n", serde_json::to_string_pretty(export)?);
 
     if let Some(parent) = output.parent() {
@@ -637,92 +561,21 @@ fn write_curated_export(output: &PathBuf, export: &CuratedItemExport) -> Result<
 
 fn validate_curated_export(file: &PathBuf) -> Result<()> {
     let content = std::fs::read_to_string(file).context("Failed to read CuratedItemExport JSON")?;
-    let value: serde_json::Value = serde_json::from_str(&content).context("Invalid JSON")?;
-    let object = value
-        .as_object()
-        .context("CuratedItemExport must be a JSON object")?;
-
-    for field in [
-        "format",
-        "export_id",
-        "origin_product",
-        "created_by",
-        "created_at",
-        "purpose",
-        "privacy_classification",
-        "item",
-        "source_ref",
-        "curation",
-        "rule_evidence",
-        "constraints",
-        "artifact_ref",
-        "provenance_ref",
-    ] {
-        anyhow::ensure!(
-            object.contains_key(field),
-            "missing required field: {field}"
-        );
-    }
-    anyhow::ensure!(
-        object.get("format").and_then(|v| v.as_str()) == Some("feedmind.curated_item_export.v0.1"),
-        "invalid CuratedItemExport format"
-    );
-    anyhow::ensure!(
-        object.get("origin_product").and_then(|v| v.as_str()) == Some("rumble-feed-mind"),
-        "invalid origin_product"
-    );
-    let constraints = object
-        .get("constraints")
-        .and_then(|v| v.as_object())
-        .context("constraints must be an object")?;
-    for field in [
-        "contains_raw_private_content",
-        "contains_secrets",
-        "contains_byok_material",
-        "allow_downstream_execution",
-    ] {
-        anyhow::ensure!(
-            constraints.get(field).and_then(|v| v.as_bool()) == Some(false),
-            "constraint must be false: {field}"
-        );
-    }
-    let item = object
-        .get("item")
-        .and_then(|v| v.as_object())
-        .context("item must be an object")?;
-    for field in ["content_hash", "source_url_hash"] {
-        let hash = item
-            .get(field)
-            .and_then(|v| v.as_str())
-            .with_context(|| format!("item.{field} must be a string"))?;
-        anyhow::ensure!(is_sha256_tag(hash), "item.{field} must be a sha256 tag");
-    }
-    let artifact_hash = object
-        .get("artifact_ref")
-        .and_then(|v| v.as_object())
-        .and_then(|o| o.get("hash"))
-        .and_then(|v| v.as_str())
-        .context("artifact_ref.hash must be a string")?;
-    anyhow::ensure!(
-        is_sha256_tag(artifact_hash),
-        "artifact_ref.hash must be a sha256 tag"
-    );
+    let export: CuratedItemExport =
+        serde_json::from_str(&content).context("Invalid CuratedItemExport JSON")?;
+    export
+        .validate_client_safe()
+        .context("CuratedItemExport is not client-safe")?;
 
     println!(
         "{}",
         serde_json::to_string_pretty(&serde_json::json!({
             "file": file.display().to_string(),
             "valid": true,
-            "format": "feedmind.curated_item_export.v0.1"
+            "format": CURATED_ITEM_EXPORT_FORMAT
         }))?
     );
     Ok(())
-}
-
-fn is_sha256_tag(value: &str) -> bool {
-    value
-        .strip_prefix("sha256:")
-        .is_some_and(|hex| hex.len() == 64 && hex.chars().all(|ch| ch.is_ascii_hexdigit()))
 }
 
 fn load_article(article_file: &PathBuf) -> Result<Article> {
@@ -811,14 +664,14 @@ fn build_curated_export(
         .unwrap_or_else(|| "Rule was not evaluated".to_string());
 
     Ok(CuratedItemExport {
-        format: "feedmind.curated_item_export.v0.1",
+        format: CURATED_ITEM_EXPORT_FORMAT.to_string(),
         export_id: export_id.clone(),
-        origin_product: "rumble-feed-mind",
+        origin_product: CURATED_ITEM_EXPORT_ORIGIN.to_string(),
         workspace_id: "workspace:local-demo".to_string(),
         created_by: actor.to_string(),
         created_at: created_at.clone(),
-        purpose: "local_export",
-        privacy_classification: "normal",
+        purpose: CURATED_ITEM_EXPORT_PURPOSE.to_string(),
+        privacy_classification: "normal".to_string(),
         item: CuratedExportItem {
             item_id: article.id.to_string(),
             title: article.title.clone(),
@@ -832,8 +685,8 @@ fn build_curated_export(
         },
         source_ref: CuratedSourceRef {
             source_id: format!("source:{}", article.guid),
-            source_type: "feed_item",
-            origin_product: "rumble-feed-mind",
+            source_type: "feed_item".to_string(),
+            origin_product: CURATED_ITEM_EXPORT_ORIGIN.to_string(),
             content_hash,
             provenance_id: provenance_id.clone(),
             opml_title: opml.title.clone(),
@@ -842,9 +695,9 @@ fn build_curated_export(
         },
         curation: CuratedExportCuration {
             decision: if result.action.is_some() {
-                "saved"
+                "saved".to_string()
             } else {
-                "rejected"
+                "rejected".to_string()
             },
             reason: result
                 .deciding_rule
@@ -854,7 +707,7 @@ fn build_curated_export(
         },
         rule_evidence: vec![CuratedRuleEvidence {
             rule_id: stable_rule_id(input),
-            decision,
+            decision: decision.to_string(),
             explanation,
             evidence_hash,
             confidence,
@@ -864,18 +717,18 @@ fn build_curated_export(
             contains_secrets: false,
             contains_byok_material: false,
             allow_downstream_execution: false,
-            data_residency: "EU/local-first",
-            retention_policy_ref: "retention:feedmind-local-demo",
+            data_residency: "EU/local-first".to_string(),
+            retention_policy_ref: "retention:feedmind-local-demo".to_string(),
         },
         artifact_ref: CuratedArtifactRef {
             artifact_id: format!("artifact:{export_id}"),
-            artifact_type: "curated_export",
+            artifact_type: "curated_export".to_string(),
             hash: artifact_hash,
-            manifest_ref: "manifest:feedmind-local-demo",
+            manifest_ref: "manifest:feedmind-local-demo".to_string(),
         },
         provenance_ref: CuratedProvenanceRef {
             provenance_id,
-            operation: "exported",
+            operation: "exported".to_string(),
             timestamp: created_at,
         },
     })
