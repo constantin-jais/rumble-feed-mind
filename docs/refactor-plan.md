@@ -2,7 +2,15 @@
 
 ## Objectif
 
-Pivoter `rumble-feed-mind` vers une stack produit Rust-first : le domaine, les règles, les contrats IA, la synchronisation, les adapters et les surfaces durables doivent converger vers Rust. Le legacy Next.js reste une référence de migration, pas une cible durable.
+Pivoter `rumble-feed-mind` vers une stack produit Rust-first : le domaine, les règles, les contrats IA, la synchronisation, les adapters et les surfaces durables doivent converger vers Rust. Les surfaces Next.js et Leptos retirées du workspace restent des références historiques, pas des cibles durables.
+
+## État vérifié au 2026-07-12
+
+- Les crates `domain`, `ingest`, `rules`, `sync` et `storage` sont extraites ; API, worker et CLI ne dépendent plus de la façade `feedmind-core`.
+- La CLI prouve OPML → fetch/fixture → normalisation → règle explicable → export JSON golden ; l'issue #4 est terminée.
+- Le spike Leptos a été exécuté puis retiré ; son évaluation reste dans `docs/spikes/leptos-web-shell.md`.
+- ADR 0002 fixe **Dioxus** comme cible durable. Le prochain jalon UI est un parcours produit Dioxus runnable après stabilisation des contrats Portal.
+- Aucun shell desktop/Tauri n'est un objectif actif ; la distribution sera évaluée après la preuve Dioxus et fera l'objet d'une décision dédiée.
 
 ## Vision challengée
 
@@ -19,13 +27,12 @@ Conséquences :
 - Le produit central n'est pas PostgreSQL.
 - Le produit central est le graphe d'information + décisions explicables + sync/export.
 
-## Problèmes observés
+## Restes observés
 
-- Workspace Rust existant mais encore organisé autour d'un `core` monolithique.
-- Beaucoup de logique applicative reste couplée aux adapters API/worker.
-- UI durable encore en TypeScript/Next.js.
-- Distribution multi-plateforme pas encore matérialisée.
-- Pas encore de modèle d'événements métier rejouables.
+- Les contrats UI Portal ne sont pas encore matérialisés dans une surface produit Dioxus.
+- La distribution multi-plateforme n'est pas encore décidée ni prouvée.
+- Les événements et snapshots existent comme primitives, mais leur persistance/rejeu produit reste à compléter.
+- Les parcours serveur self-hostable et l'observabilité de production restent incomplets.
 
 ## Architecture cible
 
@@ -40,10 +47,9 @@ graph TD
     API[crates/api\nAxum adapter]
     Worker[crates/worker\nJobs adapter]
     CLI[crates/cli\nReference client]
-    WebRs[apps/web-rs\nLeptos/WASM]
-    Desktop[apps/desktop\nTauri 2]
-    Mobile[apps/mobile\nTauri mobile/Rust-first]
-    Legacy[apps/web\nNext legacy]
+    Portal[Portal\nTokens + a11y + i18n + shells]
+    Dioxus[Future product surface\nDioxus]
+    History[Git + docs/spikes\nNext.js / Leptos evidence]
     DB[(PostgreSQL)]
     Redis[(Redis)]
     SQLite[(SQLite local future)]
@@ -61,10 +67,9 @@ graph TD
     CLI --> Domain
     CLI --> Ingest
     CLI --> Rules
-    WebRs --> API
-    Desktop --> WebRs
-    Mobile --> WebRs
-    Legacy -. migration reference .-> WebRs
+    Dioxus --> API
+    Dioxus --> Portal
+    History -. migration evidence .-> Dioxus
     Storage --> DB
     Worker --> Redis
     Sync --> SQLite
@@ -133,22 +138,26 @@ La CLI doit prouver que le produit existe sans UI web :
 
 ### Chantier 6 — UI Rust
 
-- Extraire les contrats écran depuis Next.js.
-- Créer `apps/web-rs` Leptos/WASM.
-- Migrer d'abord les parcours critiques : liste feeds, liste articles, article detail, règles.
-- Garder Next.js comme oracle visuel/fonctionnel temporaire.
+Trajectoire initiale conservée pour l'historique : un spike `apps/web-rs` Leptos/WASM a évalué le shell Rust, puis a été retiré après ratification Dioxus. L'évaluation demeure dans `docs/spikes/leptos-web-shell.md` ; Next.js est également archivé hors du workspace.
+
+Trajectoire active :
+
+- stabiliser les contrats écran et UI Portal ;
+- créer une surface Dioxus runnable sur un parcours produit réel, alimenté par les contrats Rust existants et non par des données uniquement mockées ;
+- documenter sa commande de build/test et son smoke reproductible ;
+- étendre ensuite aux parcours critiques : feeds, articles, détail, règles et evidence.
 
 ### Chantier 7 — Distribution
 
-- Desktop : Tauri 2 après web-rs utilisable.
-- Mobile : Tauri mobile ou autre shell Rust-first après validation des contraintes UX/offline.
-- Release : matrix Linux/macOS/Windows, artefacts signés si possible.
+- Évaluer les cibles web/native/desktop/mobile à partir de la preuve Dioxus.
+- Formaliser le choix de packaging dans une décision dédiée avant de créer un shell.
+- Conserver la matrice CLI Linux/macOS/Windows et ajouter des artefacts UI seulement lorsqu'une cible est retenue.
 
 ## Non-objectifs immédiats
 
 - Pas de big bang UI.
-- Pas de suppression de Next.js avant couverture des parcours critiques.
-- Pas de Tauri avant contrats UI Rust stabilisés.
+- Pas d'effacement de l'historique Next.js/Leptos ; leurs retraits du workspace restent documentés.
+- Pas de shell desktop ni de choix Tauri implicite avant preuve Dioxus et décision dédiée.
 - Pas de nouveau provider IA tant que BYOK/crypto/audit ne sont pas durcis.
 - Pas d'hébergement US obligatoire.
 

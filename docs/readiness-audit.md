@@ -1,5 +1,7 @@
 # rumble-feed-mind — Readiness Audit
 
+> Mise à jour de trajectoire (2026-07-12) : cet audit reste un instantané historique du 2026-06-30. Depuis, `apps/web` et le spike Leptos `apps/web-rs` ont été retirés du workspace. ADR 0002 fixe Dioxus comme cible durable ; la prochaine preuve UI doit être un parcours produit Dioxus runnable après stabilisation des contrats Portal. Tauri n'est pas un jalon actif.
+
 Date: 2026-06-30  
 Decision: **READY_FOR_IMPLEMENTATION_PLANNING** for scoped `CuratedItemExport` / Provider-BYOK hardening package.  
 Allowed work: planning tasks, Rust core implementation, and MVP Rust-first UI screens within scope.  
@@ -28,16 +30,16 @@ Forbidden work: Rumble-triggered execution, non-MVP UI expansion, mandatory Stri
 
 ### Rust/Dioxus or Rust-first target
 
-PASS. Evidence:
+PASS au moment de l'audit. Evidence :
 
 - workspace Rust crates in `Cargo.toml`;
 - `README.md` says Rust-first product stack;
 - `docs/adr/0002-rust-first-product-stack.md` accepts Dioxus as target UI;
-- `apps/web-rs` exists as Rust UI target.
+- `apps/web-rs` existait alors comme spike Rust ; il a depuis été retiré et ne constitue pas la cible Dioxus.
 
 ### Next.js legacy
 
-WARN. Evidence: `apps/web/package.json` uses Next.js 16. It is documented as legacy/migration reference in `README.md` and ADR 0002. This is acceptable only if no new durable product invariants are added there.
+WARN au moment de l'audit. `apps/web/package.json` utilisait Next.js 16 comme legacy/référence de migration ; cette surface a depuis été archivée et retirée du workspace.
 
 ### Stripe
 

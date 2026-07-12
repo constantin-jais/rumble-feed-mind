@@ -18,6 +18,7 @@ A local-first feed intelligence pipeline: OPML, RSS, Atom and JSON Feed into exp
 | Maturity | **Dojo** — usable CLI/API proofs, incomplete product workflow |
 | Works today | local OPML parsing, rule evaluation, deterministic `CuratedItemExport` fixtures |
 | Not scale-ready | hosted operations, multi-user guarantees, complete UI and production observability |
+| Next product UI proof | one runnable Dioxus slice after Portal UI contracts stabilize; no desktop/Tauri milestone is active |
 | Historical IDs | `rumble-feed-mind` and `feedmind-*` remain technical package/contract IDs |
 
 Temporary RustSec waivers documented in the repository must be removed or renewed before their stated expiry; they are not a production-readiness claim.
@@ -87,7 +88,7 @@ Feed Radar owns subscriptions, user-visible rules, selection decisions and expla
 
 ## Architecture
 
-The Rust workspace separates domain, ingestion, rules, provider traits, sync, storage ports, API, workers and CLI. UI targets remain targets until backed by runnable evidence.
+The Rust workspace separates domain, ingestion, rules, provider traits, sync, storage ports, API, workers and CLI. UI targets remain targets until backed by runnable evidence. ADR 0002 makes Dioxus the durable target; the removed Leptos spike remains historical evidence in [`docs/spikes/leptos-web-shell.md`](docs/spikes/leptos-web-shell.md), and desktop packaging requires a later, evidence-backed decision.
 
 - [`docs/refactor-plan.md`](docs/refactor-plan.md)
 - [`docs/launch-target.md`](docs/launch-target.md)

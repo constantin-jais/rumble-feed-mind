@@ -7,7 +7,7 @@
 ## Doctrine
 
 - **Rust-first product stack + Portal** : domaine, règles, sync, contrats IA et adapters doivent tendre vers Rust ; les surfaces durables consomment Portal pour tokens, accessibilité, i18n UI et shells web/natifs.
-- **Next.js legacy** : `apps/web` reste une référence fonctionnelle de migration, pas la cible long terme.
+- **Surfaces historiques** : le legacy Next.js et le spike Leptos ont été retirés du workspace ; leur historique et `docs/spikes/leptos-web-shell.md` restent des références de migration, pas des cibles long terme.
 - **Adapters minces** : `api`, `worker`, `cli`, UI et shells de distribution ne portent pas la logique métier durable.
 - **Explicabilité obligatoire** : une règle ou décision de tri doit produire une raison et, si possible, une evidence.
 - **Event-minded** : préférer des événements métier rejouables (`FeedFetched`, `ArticleDiscovered`, `RuleEvaluated`) aux mutations opaques.
@@ -28,10 +28,10 @@ crates/
   api/      adapter HTTP Axum
   worker/   adapter jobs Redis/scheduler/fetch/evaluation
   cli/      diagnostics, import/export, opérations locales
-apps/
-  desktop/  cible Tauri 2
-  mobile/   cible SwiftUI/Compose via Portal ou Tauri mobile selon preuve produit
-  web/      legacy Next.js, référence de migration
+surfaces/  # cibles, non encore matérialisées dans le workspace
+  ui/       Dioxus multi-target après stabilisation des contrats Portal
+  distro/   web/native à évaluer sur preuve produit et décision dédiée
+  legacy/   Next.js et Leptos archivés dans Git/docs, pas de cible active
 ```
 
 ## Quality gates locaux
@@ -46,11 +46,7 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 agentic-harness goals report --config goals.toml
 ```
 
-Pour le legacy web :
-
-```bash
-cd apps/web && npm run lint
-```
+Le gate historique `cd apps/web && npm run lint` n'est plus actif depuis le retrait du legacy Next.js.
 
 ## Règles de modification
 
@@ -69,5 +65,5 @@ cd apps/web && npm run lint
 3. Extraire `ingest` et `rules` avec tests de non-régression.
 4. Modéliser `Decision`, `Evidence`, `Action` et les événements métier.
 5. Faire de la CLI le premier client complet du core.
-6. Préparer le shell web **Dioxus** (ADR 0002 / ecosystem ADR 0032) seulement après stabilisation des contrats UI Portal ; le spike Leptos `apps/web-rs` a été retiré (évaluation conservée dans `docs/spikes/leptos-web-shell.md`).
-7. Ajouter Tauri 2 après preuve du shell web Dioxus/CLI/API.
+6. Prouver un premier parcours produit **Dioxus** vérifiable (ADR 0002 / ecosystem ADR 0032) seulement après stabilisation des contrats UI Portal ; le spike Leptos `apps/web-rs` a été retiré (évaluation conservée dans `docs/spikes/leptos-web-shell.md`).
+7. N'évaluer la distribution web/native/desktop/mobile qu'après cette preuve, avec une décision dédiée ; Tauri n'est pas un sous-jalon actif.

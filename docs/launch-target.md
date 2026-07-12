@@ -2,7 +2,7 @@
 
 ## Définition du lancement
 
-Le lancement produit cible n'est pas une simple démo web. C'est une distribution self-hostable et reproductible du moteur de veille : CLI, API, worker, base PostgreSQL/Redis, puis surface web Rust et desktop.
+Le lancement produit cible n'est pas une simple démo web. C'est une distribution self-hostable et reproductible du moteur de veille : CLI, API, worker, base PostgreSQL/Redis, puis surface produit Dioxus. La distribution web/native/desktop/mobile sera choisie après preuve du parcours Dioxus, pas présupposée.
 
 ## Release train
 
@@ -23,17 +23,26 @@ Le lancement produit cible n'est pas une simple démo web. C'est une distributio
 - Docker Compose propre PostgreSQL/Redis.
 - Smoke test local documenté.
 
-### RC2 — Product surface Rust
+### RC2 — Première preuve produit Dioxus
 
-- `apps/web-rs` Leptos couvre les parcours critiques : feeds, articles, règles.
-- Next.js reste legacy uniquement.
-- API contract stabilisé.
+- Les contrats UI Portal nécessaires sont stabilisés.
+- Une surface Dioxus runnable couvre un parcours réel alimenté par les contrats Rust existants, sans données uniquement mockées.
+- La commande de build/test et un smoke reproductible sont documentés.
+- Les surfaces Next.js et Leptos restent des références historiques uniquement.
 
-### RC3 — Multi-platform
+### RC3 — Parcours critiques Dioxus
 
-- Desktop Tauri 2 Linux/macOS/Windows.
-- Artefacts versionnés et checksums.
+- Dioxus couvre feeds, articles et règles avec décisions expliquées.
+- Le contrat API est stabilisé.
+- Les tests de parcours critiques sont reproductibles.
+
+### RC4 — Distribution multi-plateforme
+
+- Les cibles web/native/desktop/mobile sont sélectionnées à partir des preuves Dioxus et d'une décision dédiée.
+- Artefacts versionnés et checksums pour les cibles retenues.
 - Release notes et procédure rollback.
+
+La séquence historique « Leptos puis Tauri 2 » a produit un spike archivé, puis a été remplacée par ADR 0002 ; elle ne constitue plus un release train actif.
 
 ## Parcours critique launch
 
@@ -74,16 +83,12 @@ cargo deny check
 cargo audit
 ```
 
-Legacy web, tant qu'il existe :
-
-```bash
-cd apps/web && npm run lint
-```
+Le gate `cd apps/web && npm run lint` appartenait au legacy Next.js ; il n'est plus exécutable depuis l'archivage/retrait de cette surface et ne fait pas partie des gates actives.
 
 ## Issues GitHub de pilotage
 
-- #1 — Epic refonte Rust-first totale.
-- #2 — Extraction `feedmind-domain`.
-- #3 — Split `ingest/rules/sync/storage`.
-- #4 — CLI client de référence.
-- #5 — UI Rust Leptos puis Tauri 2.
+- #1 — Epic refonte Rust-first totale et prochaine preuve produit Dioxus.
+- #2 — Extraction `feedmind-domain` (terminée).
+- #3 — Split `ingest/rules/sync/storage` (terminé).
+- #4 — CLI client de référence (terminée après preuve du pipeline local et du JSON golden).
+- #5 et #8 — trajectoire historique Leptos/Tauri fermée, remplacée par ADR 0002.
