@@ -13,7 +13,7 @@ This is a contribution map, not a startup roadmap or a delivery promise. It show
 
 ## Next
 
-- define and prove the first runnable Dioxus product slice after Portal UI contracts stabilize; this is the next UI milestone, not a desktop/Tauri shell;
+- implement the [canonical first Dioxus product slice](docs/plans/2026-07-first-dioxus-product-slice-v1.md) tracked by [#66](https://github.com/libre-ai/feed-radar/issues/66): a local explainable curated-item review backed by the real Rust export contract and golden pipeline; this remains pending proof and is not a desktop/Tauri shell;
 - add example curated-item exports;
 - improve ingest and rule errors;
 - add contract tests around BYOK, export, and fail-closed behavior;
