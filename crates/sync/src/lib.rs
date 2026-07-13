@@ -10,8 +10,6 @@ use feedmind_domain::{Article, Feed, FeedMindEvent, Rule};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub mod curated;
-
 /// Monotonic cursor used by sync clients.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SyncCursor {

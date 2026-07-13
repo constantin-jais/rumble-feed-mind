@@ -1,7 +1,7 @@
 //! Local, read-only Feed Radar product slice over the real curated export contract.
 
 use dioxus::prelude::*;
-use feedmind_sync::curated::{CuratedItemExport, CuratedItemValidationError};
+use feedmind_sync::curated::{CuratedItemExport, CuratedValidationError};
 use std::fmt;
 
 const GOLDEN_EXPORT: &str = include_str!("../../../examples/expected-curated-export.json");
@@ -10,7 +10,7 @@ const DESIGN_THEMES: Asset = asset!("/assets/libre-ia/themes.css");
 const DESIGN_COMPONENTS: Asset = asset!("/assets/libre-ia/components.css");
 const STYLES: Asset = asset!("/assets/styles.css");
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum ReviewState {
     Ready(Box<CuratedItemExport>),
     Empty,
@@ -20,7 +20,7 @@ pub enum ReviewState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReviewLoadError {
     InvalidJson,
-    UnsafeContract(CuratedItemValidationError),
+    UnsafeContract(CuratedValidationError),
 }
 
 impl fmt::Display for ReviewLoadError {
