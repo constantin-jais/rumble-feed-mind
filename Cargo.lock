@@ -1094,6 +1094,7 @@ dependencies = [
  "feedmind-opml",
  "feedmind-rules",
  "feedmind-storage",
+ "feedmind-sync",
  "password-hash",
  "serde",
  "serde_json",
@@ -1217,6 +1218,8 @@ dependencies = [
  "chrono",
  "feedmind-domain",
  "serde",
+ "serde_json",
+ "thiserror 2.0.18",
  "uuid 1.23.4",
 ]
 
