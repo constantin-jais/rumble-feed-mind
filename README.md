@@ -16,9 +16,9 @@ A local-first feed intelligence pipeline: OPML, RSS, Atom and JSON Feed into exp
 | | |
 | --- | --- |
 | Maturity | **Dojo** — usable CLI/API proofs, incomplete product workflow |
-| Works today | local OPML parsing, rule evaluation, deterministic `CuratedItemExport` fixtures |
-| Not scale-ready | hosted operations, multi-user guarantees, complete UI and production observability |
-| Next product UI proof | one runnable Dioxus slice after Portal UI contracts stabilize; no desktop/Tauri milestone is active |
+| Works today | local OPML parsing, rule evaluation, deterministic `CuratedItemExport` fixtures and one read-only Dioxus curated-review proof |
+| Not scale-ready | hosted operations, multi-user guarantees, editable UI and production observability |
+| Product UI proof | runnable Dioxus web slice with pinned Client Kit design provenance and Chromium/Firefox/WebKit mobile-width checks; local fixture only, not an API or release |
 | Historical IDs | `rumble-feed-mind` and `feedmind-*` remain technical package/contract IDs |
 
 Temporary RustSec waivers documented in the repository must be removed or renewed before their stated expiry; they are not a production-readiness claim.
@@ -41,6 +41,22 @@ diff -u examples/expected-curated-export.json out/curated.json
 ```
 
 The optional `demo-curate-live` command uses the network and is intentionally excluded from deterministic CI.
+
+## Local product journey
+
+The first Dioxus slice renders the real golden `CuratedItemExport` through the portable `feedmind-sync` contract. It displays the selected item, decision, reason, explanation, confidence and technical evidence without database, account, network request or browser storage.
+
+```bash
+python3 scripts/verify-design-system.py
+cargo test -p feedmind-sync -p feedmind-app
+cargo check -p feedmind-domain -p feedmind-sync -p feedmind-app \
+  --target wasm32-unknown-unknown --features feedmind-app/web
+./scripts/build-feedmind-app.sh
+npm ci --prefix e2e
+npm --prefix e2e test
+```
+
+The bundle carries the verified Libre IA Design System 2.0 CSS from the pinned Client Kit builder revision and rejects provenance drift, remote assets and failed contrast checks. This remains a local, read-only product proof: it does not establish PWA, hosted, desktop, native mobile or multi-user availability.
 
 ## PostgreSQL tenant isolation
 

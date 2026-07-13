@@ -1,0 +1,30 @@
+[package]
+name = "feedmind-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = []
+web = [
+    "dioxus/launch",
+    "dioxus/asset",
+    "dioxus/cli-config",
+    "dioxus/warnings",
+    "dioxus/web",
+]
+
+[[bin]]
+name = "feedmind-app"
+path = "src/main.rs"
+
+[dependencies]
+dioxus = { workspace = true }
+feedmind-sync = { workspace = true }
+serde_json = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["Location", "Window"] }
+
+[dev-dependencies]
+dioxus-ssr = { workspace = true }

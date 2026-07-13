@@ -9,11 +9,12 @@ This is a contribution map, not a startup roadmap or a delivery promise. It show
 - improve classification logs;
 - maintain the separated-role, transaction-local tenant and forced-RLS guarantees from ADR 0006;
 - document advisory waivers and known limits;
+- keep the read-only Dioxus curated-review proof, its portable contract and browser gate green;
 - keep Rust CI, security, and release checks green.
 
 ## Next
 
-- implement the [canonical first Dioxus product slice](docs/plans/2026-07-first-dioxus-product-slice-v1.md) tracked by [#66](https://github.com/libre-ai/feed-radar/issues/66): a local explainable curated-item review backed by the real Rust export contract and golden pipeline; this remains pending proof and is not a desktop/Tauri shell;
+- connect the proven read-only slice to a deliberately scoped local source only after privacy and mutation contracts are accepted;
 - add example curated-item exports;
 - improve ingest and rule errors;
 - add contract tests around BYOK, export, and fail-closed behavior;

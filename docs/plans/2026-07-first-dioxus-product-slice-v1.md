@@ -5,7 +5,7 @@
 | Identifiant | `feed-radar.dioxus-product-proof.v1` |
 | Version | `1.0.0` |
 | Date | 2026-07-12 |
-| Statut | canonique, prête à implémenter ; aucune UI incluse dans ce plan |
+| Statut | verticale locale implémentée dans le worktree avec provenance Design System et preuve Chromium/Firefox/WebKit ; promotion encore bloquée par revue humaine et absence de fusion |
 | Epic | [#1](https://github.com/libre-ai/feed-radar/issues/1) |
 | Issue d’implémentation unique | [#66](https://github.com/libre-ai/feed-radar/issues/66) |
 | Jalon goals | `phase_4.dioxus-product-proof`, maintenu `pending` jusqu’à preuve complète fusionnée |
@@ -204,7 +204,7 @@ graph TD
     ACCEPT -. n’entraîne pas .-> EPIC[Clôture #1]
 ```
 
-Chaque PR est verte, reviewable et réversible seule. « Indépendante » signifie qu’elle ne mélange pas son incrément avec le suivant ; les flèches expriment les dépendances nécessaires.
+Chaque incrément reste reviewable et réversible seul. Le worktree local matérialise le flux contrat → app Dioxus → projection réelle → E2E Chromium/Firefox/WebKit mobile, sans créer de commits séparés. La distribution web du Design System 2.0 est embarquée avec lock, provenance, contrast report et contrôle de drift. Cette preuve ne vaut ni fusion ni promotion du goal.
 
 ## Étapes d’implémentation en PRs
 
