@@ -3,12 +3,12 @@
 //! This crate is intentionally storage-agnostic. It defines event batches and
 //! snapshots that can be persisted by `feedmind-storage` implementations.
 
+pub mod curated;
+
 use chrono::{DateTime, Utc};
 use feedmind_domain::{Article, Feed, FeedMindEvent, Rule};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-pub mod curated;
 
 /// Monotonic cursor used by sync clients.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

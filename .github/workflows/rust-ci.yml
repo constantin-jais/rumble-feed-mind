@@ -40,12 +40,14 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - name: Format
         run: cargo fmt --all --check
-      - name: Check
-        run: cargo check --workspace --all-targets --all-features
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-      - name: Test
-        run: cargo test --workspace --all-features
+      - name: Check host targets
+        # The `feedmind-app/web` feature is a wasm-only launch surface and is
+        # compiled explicitly in contracts.yml on wasm32-unknown-unknown.
+        run: cargo check --workspace --all-targets
+      - name: Clippy host targets
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test host targets
+        run: cargo test --workspace
       - name: Curated export demo contract
         run: |
           set -euo pipefail
@@ -58,4 +60,4 @@ jobs:
           python3 -m json.tool out/curated.json >/dev/null
           cargo run -p feedmind-cli -- validate-curated-export --file out/curated.json
       - name: Documentation
-        run: cargo doc --workspace --all-features --no-deps
+        run: cargo doc --workspace --no-deps

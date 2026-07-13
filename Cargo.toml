@@ -12,6 +12,7 @@ members = [
     "crates/api",
     "crates/worker",
     "crates/cli",
+    "surfaces/ui",
 ]
 
 [workspace.package]
@@ -90,6 +91,10 @@ regex = "1.11"
 
 # Cron scheduler
 tokio-cron-scheduler = "0.13"
+
+# Product UI
+dioxus = { version = "=0.7.9", default-features = false, features = ["macro", "html", "signals", "hooks", "asset", "document"] }
+dioxus-ssr = "=0.7.9"
 
 # Internal crates
 feedmind-crypto = { version = "0.1.0", path = "crates/crypto" }
