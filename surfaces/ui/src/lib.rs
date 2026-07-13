@@ -4,7 +4,8 @@ use dioxus::prelude::*;
 use feedmind_sync::curated::{CuratedItemExport, CuratedValidationError};
 use std::fmt;
 
-const GOLDEN_EXPORT: &str = include_str!("../../../examples/expected-curated-export.json");
+const BUNDLED_EXPORT: &str = include_str!(concat!(env!("OUT_DIR"), "/review-export.json"));
+const REVIEW_MODE: &str = include_str!(concat!(env!("OUT_DIR"), "/review-mode.txt"));
 const DESIGN_TOKENS: Asset = asset!("/assets/libre-ia/tokens.css");
 const DESIGN_THEMES: Asset = asset!("/assets/libre-ia/themes.css");
 const DESIGN_COMPONENTS: Asset = asset!("/assets/libre-ia/components.css");
@@ -53,13 +54,17 @@ pub fn App() -> Element {
         document::Link { rel: "stylesheet", href: DESIGN_THEMES }
         document::Link { rel: "stylesheet", href: DESIGN_COMPONENTS }
         document::Link { rel: "stylesheet", href: STYLES }
-        {render_state(load_review(GOLDEN_EXPORT))}
+        {render_state_with_mode(load_review(BUNDLED_EXPORT), REVIEW_MODE.trim() == "live-sync")}
     }
 }
 
 pub fn render_state(state: ReviewState) -> Element {
+    render_state_with_mode(state, false)
+}
+
+fn render_state_with_mode(state: ReviewState, live_sync: bool) -> Element {
     match state {
-        ReviewState::Ready(export) => render_ready(export),
+        ReviewState::Ready(export) => render_ready(export, live_sync),
         ReviewState::Empty => rsx! {
             main { class: "shell",
                 section { class: "state-card", aria_live: "polite",
@@ -82,7 +87,7 @@ pub fn render_state(state: ReviewState) -> Element {
     }
 }
 
-fn render_ready(export: Box<CuratedItemExport>) -> Element {
+fn render_ready(export: Box<CuratedItemExport>, live_sync: bool) -> Element {
     let evidence = &export.rule_evidence[0];
     let confidence = format!("{:.0} %", evidence.confidence * 100.0);
     let source_title = export
@@ -90,13 +95,24 @@ fn render_ready(export: Box<CuratedItemExport>) -> Element {
         .first_feed_title
         .as_deref()
         .unwrap_or("Source locale");
+    let mode = if live_sync { "live-sync" } else { "fixture" };
+    let eyebrow = if live_sync {
+        "Feed Radar · synchronisation publique bornée"
+    } else {
+        "Feed Radar · démonstration locale"
+    };
+    let introduction = if live_sync {
+        "Cette page relit un export produit depuis des flux publics explicitement autorisés. Le bundle reste statique : aucun fetch, compte ou fournisseur IA n’est appelé dans le navigateur."
+    } else {
+        "Cette page relit un export déterministe produit par le pipeline Rust. Elle n’appelle ni API, ni fournisseur IA, ni base de données."
+    };
     rsx! {
-        main { class: "shell",
+        main { class: "shell", "data-review-mode": mode,
             header { class: "hero",
                 div {
-                    p { class: "eyebrow", "Feed Radar · démonstration locale" }
+                    p { class: "eyebrow", "{eyebrow}" }
                     h1 { "Une information retenue pour une raison visible." }
-                    p { class: "lede", "Cette page relit un export déterministe produit par le pipeline Rust. Elle n’appelle ni API, ni fournisseur IA, ni base de données." }
+                    p { class: "lede", "{introduction}" }
                 }
                 div { class: "status", aria_label: "Décision de curation",
                     span { class: "status-mark", aria_hidden: "true", "✓" }
@@ -143,7 +159,11 @@ fn render_ready(export: Box<CuratedItemExport>) -> Element {
 
             aside { class: "limits", aria_label: "Limites de la démonstration",
                 h2 { "Ce que cette preuve ne démontre pas" }
-                p { "Pas d’import interactif, de fetch réseau, de compte, de stockage navigateur, de synchronisation ou de support mobile natif." }
+                if live_sync {
+                    p { "L’import et la synchronisation ont lieu avant le build via la CLI locale. Pas encore d’import interactif, de compte, de stockage navigateur, d’actualisation en arrière-plan ou de support mobile natif." }
+                } else {
+                    p { "Pas d’import interactif, de fetch réseau, de compte, de stockage navigateur, de synchronisation ou de support mobile natif." }
+                }
             }
         }
     }
@@ -162,23 +182,33 @@ mod tests {
     }
 
     #[test]
-    fn golden_fixture_renders_the_complete_decision() {
-        let html = dioxus_ssr::render_element(render_state(load_review(GOLDEN_EXPORT)));
-        assert!(html.contains("Rust-first local feed curation"));
-        assert!(html.contains("Keep Rust sovereignty articles"));
-        assert!(html.contains("Title matches pattern"));
-        assert!(html.contains("100 %"));
+    fn bundled_export_renders_its_complete_decision() {
+        let export: CuratedItemExport = serde_json::from_str(BUNDLED_EXPORT).unwrap();
+        let html = dioxus_ssr::render_element(render_state(load_review(BUNDLED_EXPORT)));
+        assert!(html.contains(&export.item.title));
+        assert!(html.contains(&export.curation.reason));
+        assert!(html.contains(&export.rule_evidence[0].explanation));
         assert!(html.contains("Examiner la preuve technique"));
     }
 
     #[test]
+    fn live_sync_bundle_is_labelled_without_claiming_browser_fetch() {
+        let html =
+            dioxus_ssr::render_element(render_state_with_mode(load_review(BUNDLED_EXPORT), true));
+        assert!(html.contains("data-review-mode=\"live-sync\""));
+        assert!(html.contains("synchronisation publique bornée"));
+        assert!(html.contains("avant le build via la CLI locale"));
+    }
+
+    #[test]
     fn unsafe_fixture_renders_no_partial_content() {
-        let mut export: CuratedItemExport = serde_json::from_str(GOLDEN_EXPORT).unwrap();
+        let mut export: CuratedItemExport = serde_json::from_str(BUNDLED_EXPORT).unwrap();
         export.constraints.contains_secrets = true;
+        let title = export.item.title.clone();
         let raw = serde_json::to_string(&export).unwrap();
         let html = dioxus_ssr::render_element(render_state(load_review(&raw)));
         assert!(html.contains("Export refusé"));
-        assert!(!html.contains("Rust-first local feed curation"));
+        assert!(!html.contains(&title));
         assert!(!html.contains(&export.item.content_hash));
     }
 

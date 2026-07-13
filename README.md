@@ -16,9 +16,9 @@ A local-first feed intelligence pipeline: OPML, RSS, Atom and JSON Feed into exp
 | | |
 | --- | --- |
 | Maturity | **Dojo** — usable CLI/API proofs, incomplete product workflow |
-| Works today | local OPML parsing, rule evaluation, deterministic `CuratedItemExport` fixtures and one read-only Dioxus curated-review proof |
-| Not scale-ready | hosted operations, multi-user guarantees, editable UI and production observability |
-| Product UI proof | runnable Dioxus web slice with pinned Client Kit design provenance and Chromium/Firefox/WebKit mobile-width checks; local fixture only, not an API or release |
+| Works today | local OPML parsing, bounded allowlisted HTTPS synchronization, rule evaluation, payload-minimized replay state, client-safe exports and one read-only Dioxus curated-review proof |
+| Not scale-ready | interactive import, hosted operations, multi-user guarantees, scheduling and production observability |
+| Product UI proof | runnable Dioxus web slice over either the deterministic golden or a validated live-sync export, with pinned Client Kit provenance and Chromium/Firefox/WebKit mobile-width checks; not an API or release |
 | Historical IDs | `rumble-feed-mind` and `feedmind-*` remain technical package/contract IDs |
 
 Temporary RustSec waivers documented in the repository must be removed or renewed before their stated expiry; they are not a production-readiness claim.
@@ -42,9 +42,27 @@ diff -u examples/expected-curated-export.json out/curated.json
 
 The optional `demo-curate-live` command uses the network and is intentionally excluded from deterministic CI.
 
+### Bounded live synchronization
+
+`sync-curated` imports an OPML set, validates every fetch and redirect against exact HTTPS hosts, caps sources/items/body size, deduplicates through a hash-only local state and removes stale output when no new signal exists:
+
+```bash
+cargo run -p feedmind-cli -- sync-curated \
+  --opml examples/demo.opml \
+  --rule examples/demo-rule.json \
+  --output target/live/curated.json \
+  --state target/live/state.json \
+  --allow-host www.clever-cloud.com \
+  --allow-host clever.cloud \
+  --allow-host www.clever.cloud \
+  --allow-host blog.rust-lang.org
+```
+
+Redirect hosts are intentionally not inferred. The command is local and does not make the product publicly available.
+
 ## Local product journey
 
-The first Dioxus slice renders the real golden `CuratedItemExport` through the portable `feedmind-sync` contract. It displays the selected item, decision, reason, explanation, confidence and technical evidence without database, account, network request or browser storage.
+The Dioxus slice renders a validated `CuratedItemExport` through the portable `feedmind-sync` contract. Deterministic builds use the golden; a live proof can inject the output of `sync-curated` at build time. The browser displays the selected item, decision, reason, explanation, confidence and technical evidence without database, account, runtime network request or browser storage.
 
 ```bash
 python3 scripts/verify-design-system.py
@@ -56,7 +74,7 @@ npm ci --prefix e2e
 npm --prefix e2e test
 ```
 
-The bundle carries the verified Libre IA Design System 2.0 CSS from the pinned Client Kit builder revision and rejects provenance drift, remote assets and failed contrast checks. This remains a local, read-only product proof: it does not establish PWA, hosted, desktop, native mobile or multi-user availability.
+The bundle carries the verified Libre IA Design System 2.0 CSS from the pinned Client Kit builder revision and rejects provenance drift, remote assets and failed contrast checks. Generate the dated networked traversal with `scripts/generate-live-radar-proof.sh` and explicit `--allow-host` arguments. This remains a local, read-only product proof: it does not establish interactive import, PWA, hosted, desktop, native mobile or multi-user availability.
 
 ## PostgreSQL tenant isolation
 

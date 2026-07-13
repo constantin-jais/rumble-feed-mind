@@ -5,7 +5,7 @@
 | Identifiant | `feed-radar.dioxus-product-proof.v1` |
 | Version | `1.0.0` |
 | Date | 2026-07-12 |
-| Statut | verticale locale implémentée dans le worktree avec provenance Design System et preuve Chromium/Firefox/WebKit ; promotion encore bloquée par revue humaine et absence de fusion |
+| Statut | verticale locale fusionnée par #69 ; extension live-sync locale prouvée le 2026-07-13 ; promotion publique toujours bloquée par revue humaine et absence de runtime interactif |
 | Epic | [#1](https://github.com/libre-ai/feed-radar/issues/1) |
 | Issue d’implémentation unique | [#66](https://github.com/libre-ai/feed-radar/issues/66) |
 | Jalon goals | `phase_4.dioxus-product-proof`, maintenu `pending` jusqu’à preuve complète fusionnée |
@@ -14,7 +14,11 @@
 
 La première verticale est une **revue locale d’un article curaté et de sa décision explicable** : une surface Dioxus web/WASM affiche le `CuratedItemExport` v0.1 réellement régénéré par le pipeline Rust déterministe OPML + article normalisé + règle/evidence, à travers un port de lecture typé et un adapter fixture explicitement local.
 
-Ce n’est ni un dashboard, ni un jeu de cartes mockées, ni une promesse de runtime serveur. La preuve doit fonctionner sans PostgreSQL, Redis, secret, auth ou réseau métier.
+Ce n’est ni un dashboard, ni un jeu de cartes mockées, ni une promesse de runtime serveur. La preuve déterministe doit fonctionner sans PostgreSQL, Redis, secret, auth ou réseau métier.
+
+## Extension bornée après la v1
+
+L’[ADR 0007](../adr/0007-bounded-public-feed-sync.md) ajoute sans remplacer cette preuve déterministe une traversée locale réseau : OPML borné, hôtes HTTPS exacts, fetch/redirections contrôlés, règle explicite, état de rejeu hash-only, export validé puis bundle Dioxus statique. La CI conserve la fixture pour sa reproductibilité ; le réseau n’est exercé que par un script manuel daté. Cette extension ne crée ni import navigateur, ni API publique, ni promotion automatique de maturité.
 
 ## Pourquoi ce cadrage
 

@@ -4,6 +4,7 @@
 //! snapshots that can be persisted by `feedmind-storage` implementations.
 
 pub mod curated;
+pub mod local;
 
 use chrono::{DateTime, Utc};
 use feedmind_domain::{Article, Feed, FeedMindEvent, Rule};

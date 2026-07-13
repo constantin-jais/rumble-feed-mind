@@ -57,8 +57,8 @@ impl RuleEvaluator {
 
             if rule_match.matched {
                 debug!(
-                    rule = %rule_match.rule_name,
-                    article = %article.title,
+                    rule_id = %rule_match.rule_id,
+                    article_id = %article.id,
                     "Rule matched"
                 );
 

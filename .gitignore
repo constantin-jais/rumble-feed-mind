@@ -36,5 +36,7 @@ Thumbs.db
 *.log
 npm-debug.log*
 
-# Test coverage
+# Test coverage and browser artifacts
 coverage/
+e2e/test-results/
+e2e/playwright-report/

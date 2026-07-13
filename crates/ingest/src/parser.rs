@@ -60,46 +60,46 @@ impl FeedParser {
     }
 
     fn parse_entry(entry: feed_rs::model::Entry) -> FeedItem {
-        let title = entry
-            .title
-            .map(|t| t.content)
-            .unwrap_or_else(|| "Untitled".to_string());
-
-        let title = if title.len() > 500 {
-            format!("{}...", &title[..497])
-        } else {
-            title
-        };
-
-        let url = entry.links.first().map(|l| l.href.clone());
-
+        let title = truncate_chars(
+            entry
+                .title
+                .map(|title| title.content)
+                .unwrap_or_else(|| "Untitled".to_string()),
+            500,
+        );
+        let url = entry.links.first().map(|link| link.href.clone());
+        let summary = entry
+            .summary
+            .map(|summary| truncate_chars(summary.content, 100_000));
         let content = entry
             .content
-            .and_then(|c| c.body)
-            .or_else(|| entry.summary.clone().map(|s| s.content));
-
-        let content = content.map(|c| {
-            if c.len() > 100_000 {
-                format!("{}...", &c[..99_997])
-            } else {
-                c
-            }
-        });
-
-        let summary = entry.summary.map(|s| s.content);
-        let author = entry.authors.first().map(|a| a.name.clone());
+            .and_then(|content| content.body)
+            .map(|content| truncate_chars(content, 100_000))
+            .or_else(|| summary.clone());
+        let author = entry
+            .authors
+            .first()
+            .map(|author| truncate_chars(author.name.clone(), 500));
         let published_at = entry.published;
         let updated_at = entry.updated;
-        let categories = entry.categories.into_iter().map(|c| c.term).collect();
+        let categories = entry
+            .categories
+            .into_iter()
+            .take(64)
+            .map(|category| truncate_chars(category.term, 256))
+            .collect();
 
         let (enclosure_url, enclosure_type) = entry
             .media
             .first()
-            .and_then(|m| m.content.first())
-            .map(|c| {
+            .and_then(|media| media.content.first())
+            .map(|content| {
                 (
-                    c.url.clone().map(|u| u.to_string()),
-                    c.content_type.clone().map(|t| t.to_string()),
+                    content.url.clone().map(|url| url.to_string()),
+                    content
+                        .content_type
+                        .clone()
+                        .map(|content_type| content_type.to_string()),
                 )
             })
             .unwrap_or((None, None));
@@ -107,7 +107,7 @@ impl FeedParser {
         let guid = if entry.id.is_empty() {
             FeedItem::generate_guid(&title, url.as_deref())
         } else {
-            entry.id
+            truncate_chars(entry.id, 2_048)
         };
 
         FeedItem {
@@ -124,6 +124,16 @@ impl FeedParser {
             enclosure_type,
         }
     }
+}
+
+fn truncate_chars(value: String, max_chars: usize) -> String {
+    if value.chars().count() <= max_chars {
+        return value;
+    }
+    let retained = max_chars.saturating_sub(3);
+    let mut truncated = value.chars().take(retained).collect::<String>();
+    truncated.push_str("...");
+    truncated
 }
 
 #[cfg(test)]
@@ -180,5 +190,13 @@ mod tests {
         assert_eq!(feed.feed_type, FeedType::Atom);
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].title, "Atom Article");
+    }
+
+    #[test]
+    fn truncation_is_unicode_safe_and_bounded_in_characters() {
+        let value = "é".repeat(510);
+        let truncated = truncate_chars(value, 500);
+        assert_eq!(truncated.chars().count(), 500);
+        assert!(truncated.ends_with("..."));
     }
 }
