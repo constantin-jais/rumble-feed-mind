@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('reviews the real curated export without network or browser persistence', async ({ page }) => {
+test('reviews the bundled curated export without browser network or persistence', async ({ page }) => {
   const remoteRequests: string[] = [];
   const failedResponses: string[] = [];
   const pageErrors: Error[] = [];
@@ -17,15 +17,27 @@ test('reviews the real curated export without network or browser persistence', a
 
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /^data:image\/svg\+xml/);
   await expect(page.getByRole('heading', { level: 1 })).toContainText('raison visible');
-  await expect(page.getByRole('heading', { name: /Rust-first local feed curation/ })).toBeVisible();
-  await expect(page.getByText('Keep Rust sovereignty articles')).toBeVisible();
-  await expect(page.getByText('Title matches pattern')).toBeVisible();
+  await expect(page.locator('#item-title')).not.toBeEmpty();
   await expect(page.getByLabel('Décision de curation')).toContainText('saved');
+
+  const liveProof = process.env.FEED_RADAR_EXPECT_LIVE === '1';
+  if (liveProof) {
+    await expect(page.locator('main')).toHaveAttribute('data-review-mode', 'live-sync');
+    await expect(page.getByText(/synchronisation publique bornée/)).toBeVisible();
+  } else {
+    await expect(page.getByRole('heading', { name: /Rust-first local feed curation/ })).toBeVisible();
+    await expect(page.getByText('Keep Rust sovereignty articles')).toBeVisible();
+    await expect(page.getByText('Title matches pattern')).toBeVisible();
+  }
 
   const disclosure = page.getByText('Examiner la preuve technique');
   await disclosure.focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByText('sha256:ef16a2af327c962a100b861bdf452bcde87fe1c8ecbf9a48e83ddce6e6b69b46')).toBeVisible();
+  if (liveProof) {
+    await expect(page.locator('.proof code').first()).toHaveText(/^sha256:[0-9a-f]{64}$/);
+  } else {
+    await expect(page.getByText('sha256:ef16a2af327c962a100b861bdf452bcde87fe1c8ecbf9a48e83ddce6e6b69b46')).toBeVisible();
+  }
 
   const disclosureBox = await disclosure.boundingBox();
   expect(disclosureBox?.height ?? 0).toBeGreaterThanOrEqual(44);

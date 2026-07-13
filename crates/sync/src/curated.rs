@@ -202,6 +202,35 @@ pub enum CuratedConstraint {
     DownstreamExecution,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CuratedBoundedField {
+    ItemTitle,
+    ItemExcerpt,
+    ItemTags,
+    ItemTag,
+    OpmlTitle,
+    SourceTitle,
+    ActorReference,
+    CurationReason,
+    RuleExplanation,
+}
+
+impl fmt::Display for CuratedBoundedField {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::ItemTitle => "item.title",
+            Self::ItemExcerpt => "item.content_excerpt",
+            Self::ItemTags => "item.tags",
+            Self::ItemTag => "item.tags[]",
+            Self::OpmlTitle => "source_ref.opml_title",
+            Self::SourceTitle => "source_ref.first_feed_title",
+            Self::ActorReference => "actor_reference",
+            Self::CurationReason => "curation.reason",
+            Self::RuleExplanation => "rule_evidence.explanation",
+        })
+    }
+}
+
 impl fmt::Display for CuratedConstraint {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
@@ -238,6 +267,10 @@ pub enum CuratedValidationError {
     UnsafeConstraint { constraint: CuratedConstraint },
     #[error("invalid curated rule confidence")]
     InvalidConfidence,
+    #[error("curated export field exceeds its size limit: {field}")]
+    FieldTooLong { field: CuratedBoundedField },
+    #[error("curated export collection exceeds its item limit: {field}")]
+    TooManyValues { field: CuratedBoundedField },
 }
 
 impl CuratedValidationError {
@@ -255,6 +288,8 @@ impl CuratedValidationError {
             Self::UnsupportedValue { .. } => "curated_export.unsupported_value",
             Self::UnsafeConstraint { .. } => "curated_export.unsafe_constraint",
             Self::InvalidConfidence => "curated_export.invalid_confidence",
+            Self::FieldTooLong { .. } => "curated_export.field_too_long",
+            Self::TooManyValues { .. } => "curated_export.too_many_values",
         }
     }
 }
@@ -323,6 +358,35 @@ impl CuratedItemExport {
             require_nonempty(value, field)?;
         }
 
+        ensure_max_chars(&self.item.title, 300, CuratedBoundedField::ItemTitle)?;
+        ensure_max_chars(
+            &self.item.content_excerpt,
+            2_000,
+            CuratedBoundedField::ItemExcerpt,
+        )?;
+        if self.item.tags.len() > 64 {
+            return Err(CuratedValidationError::TooManyValues {
+                field: CuratedBoundedField::ItemTags,
+            });
+        }
+        for tag in &self.item.tags {
+            ensure_max_chars(tag, 64, CuratedBoundedField::ItemTag)?;
+        }
+        for actor in [&self.created_by, &self.curation.curated_by] {
+            ensure_max_chars(actor, 64, CuratedBoundedField::ActorReference)?;
+        }
+        ensure_max_chars(
+            &self.curation.reason,
+            1_000,
+            CuratedBoundedField::CurationReason,
+        )?;
+        if let Some(title) = &self.source_ref.opml_title {
+            ensure_max_chars(title, 300, CuratedBoundedField::OpmlTitle)?;
+        }
+        if let Some(title) = &self.source_ref.first_feed_title {
+            ensure_max_chars(title, 300, CuratedBoundedField::SourceTitle)?;
+        }
+
         validate_hash(&self.item.content_hash, CuratedHashField::ItemContent)?;
         validate_hash(&self.item.source_url_hash, CuratedHashField::ItemSourceUrl)?;
         validate_hash(
@@ -358,6 +422,11 @@ impl CuratedItemExport {
         for evidence in &self.rule_evidence {
             require_nonempty(&evidence.rule_id, CuratedRequiredField::RuleId)?;
             require_nonempty(&evidence.explanation, CuratedRequiredField::RuleExplanation)?;
+            ensure_max_chars(
+                &evidence.explanation,
+                1_000,
+                CuratedBoundedField::RuleExplanation,
+            )?;
             validate_hash(&evidence.evidence_hash, CuratedHashField::RuleEvidence)?;
             validate_known_value(
                 &evidence.decision,
@@ -404,6 +473,18 @@ fn require_nonempty(
         Err(CuratedValidationError::EmptyRequiredField { field })
     } else {
         Ok(())
+    }
+}
+
+fn ensure_max_chars(
+    value: &str,
+    max_chars: usize,
+    field: CuratedBoundedField,
+) -> Result<(), CuratedValidationError> {
+    if value.chars().count() <= max_chars {
+        Ok(())
+    } else {
+        Err(CuratedValidationError::FieldTooLong { field })
     }
 }
 
@@ -613,6 +694,36 @@ mod tests {
                 CuratedValidationError::UnsafeConstraint { constraint }
             );
         }
+    }
+
+    #[test]
+    fn rejects_oversized_client_visible_fields_and_collections() {
+        let mut title = fixture_value();
+        title["item"]["title"] = json!("é".repeat(301));
+        assert_eq!(
+            validation_error(title),
+            CuratedValidationError::FieldTooLong {
+                field: CuratedBoundedField::ItemTitle,
+            }
+        );
+
+        let mut tags = fixture_value();
+        tags["item"]["tags"] = json!((0..65).map(|i| format!("tag-{i}")).collect::<Vec<_>>());
+        assert_eq!(
+            validation_error(tags),
+            CuratedValidationError::TooManyValues {
+                field: CuratedBoundedField::ItemTags,
+            }
+        );
+
+        let mut actor = fixture_value();
+        actor["created_by"] = json!("a".repeat(65));
+        assert_eq!(
+            validation_error(actor),
+            CuratedValidationError::FieldTooLong {
+                field: CuratedBoundedField::ActorReference,
+            }
+        );
     }
 
     #[test]

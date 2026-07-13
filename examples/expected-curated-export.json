@@ -1,6 +1,6 @@
 {
   "format": "feedmind.curated_item_export.v0.1",
-  "export_id": "export:demo-1",
+  "export_id": "export:6b01c344dbe5827bec3e711f",
   "origin_product": "rumble-feed-mind",
   "workspace_id": "workspace:local-demo",
   "created_by": "actor-demo-local",
@@ -20,11 +20,11 @@
     ]
   },
   "source_ref": {
-    "source_id": "source:demo-1",
+    "source_id": "source:6b01c344dbe5827bec3e711f",
     "source_type": "feed_item",
     "origin_product": "rumble-feed-mind",
     "content_hash": "sha256:122a0630946b94e508a626da3b137d8c5405ca9df8b63ba9fde102c4cc178163",
-    "provenance_id": "provenance:export:demo-1",
+    "provenance_id": "provenance:export:6b01c344dbe5827bec3e711f",
     "opml_title": "FeedMind demo subscriptions",
     "opml_feed_count": 2,
     "first_feed_title": "Clever Cloud Blog"
@@ -53,13 +53,13 @@
     "retention_policy_ref": "retention:feedmind-local-demo"
   },
   "artifact_ref": {
-    "artifact_id": "artifact:export:demo-1",
+    "artifact_id": "artifact:export:6b01c344dbe5827bec3e711f",
     "artifact_type": "curated_export",
-    "hash": "sha256:fe7356a7fd4a7a3655dcce940b6294b8eff1f3600ceadade1d9d745165ce0ce2",
+    "hash": "sha256:ea21f8b026b4ac6598d1e54df7f8f692a8c8d50c1c057b19f240311a81af3c36",
     "manifest_ref": "manifest:feedmind-local-demo"
   },
   "provenance_ref": {
-    "provenance_id": "provenance:export:demo-1",
+    "provenance_id": "provenance:export:6b01c344dbe5827bec3e711f",
     "operation": "exported",
     "timestamp": "2026-07-01T00:02:00Z"
   }

@@ -40,12 +40,43 @@ cargo run -p feedmind-cli -- validate-curated-export --file out/live-curated.jso
 
 This command is intentionally not a CI gate: public feeds can be slow, unavailable, or change content.
 
+## Bounded synchronization and Dioxus proof
+
+Prefer `sync-curated` when the output feeds a client surface. It requires every initial and redirect host explicitly, rejects non-public networks, caps the body while streaming and stores only hashes in its replay state.
+
+```bash
+cargo run -p feedmind-cli -- sync-curated \
+  --opml examples/demo.opml \
+  --rule examples/demo-rule.json \
+  --output target/live/curated.json \
+  --state target/live/state.json \
+  --allow-host www.clever-cloud.com \
+  --allow-host clever.cloud \
+  --allow-host www.clever.cloud \
+  --allow-host blog.rust-lang.org
+```
+
+A second identical run returns `status: empty` and removes the previous export because every inspected item is already present in the bounded state. To create a fresh dated browser proof from a clean state:
+
+```bash
+./scripts/generate-live-radar-proof.sh \
+  --allow-host www.clever-cloud.com \
+  --allow-host clever.cloud \
+  --allow-host www.clever.cloud \
+  --allow-host blog.rust-lang.org
+```
+
+The generated artifacts are ignored under `target/live-radar-proof/`; the manifest explicitly denies publication authorization.
+
 ## Common failures
 
 | Symptom | Likely cause | Action |
 | --- | --- | --- |
 | `Invalid rule JSON` | malformed fixture or unsupported action | validate `examples/demo-rule.json` |
 | `Fetched feed does not contain items` | empty or incompatible live feed | try another feed URL |
+| `outside the configured public-source policy` | initial or redirect host omitted, clear-text URL or unsafe URL shape | inspect the source separately, then add only the exact expected HTTPS host |
+| `non-public network` | DNS resolves to a local, private or reserved address | reject the source; do not bypass the guard |
+| live sync returns `empty` | no new matching item after replay deduplication | wait for a new item or delete state only for an explicit fresh proof |
 | golden diff changes | contract output changed | review intentionally; update golden only with explanation |
 | `DATABASE_URL must be set` | DB-backed command used | use the no-secret commands for local demo |
 

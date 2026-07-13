@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPoolOptions;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
@@ -14,7 +14,7 @@ use feedmind_domain::article::Article;
 use feedmind_domain::feed::Feed;
 use feedmind_domain::rules::{Rule, RuleAction};
 use feedmind_domain::DecisionOutcome;
-use feedmind_ingest::FeedFetcher;
+use feedmind_ingest::{FeedFetcher, FetcherConfig};
 use feedmind_opml::{OpmlDocument, OpmlExporter, OpmlOutline, OpmlParser};
 use feedmind_rules::RuleEvaluator;
 use feedmind_sync::curated::{
@@ -22,6 +22,7 @@ use feedmind_sync::curated::{
     CuratedItemExport, CuratedProvenanceRef, CuratedRuleEvidence, CuratedSourceRef,
     CURATED_ITEM_EXPORT_FORMAT, CURATED_ITEM_EXPORT_ORIGIN, CURATED_ITEM_EXPORT_PURPOSE,
 };
+use feedmind_sync::local::{BoundedSyncLimits, LocalSyncSnapshot};
 
 #[derive(Parser)]
 #[command(name = "feedmind-cli")]
@@ -156,6 +157,42 @@ enum Commands {
         max_items: usize,
     },
 
+    /// Import a bounded OPML source set, fetch it and export the first new explained signal
+    SyncCurated {
+        /// OPML subscription file; capped before any network request
+        #[arg(long)]
+        opml: PathBuf,
+
+        /// Explicit rule used to qualify fetched items
+        #[arg(long)]
+        rule: PathBuf,
+
+        /// Client-safe CuratedItemExport output path
+        #[arg(short, long)]
+        output: PathBuf,
+
+        /// Payload-minimized replay state path
+        #[arg(long)]
+        state: PathBuf,
+
+        /// Exact public host allowed for fetch and redirects; repeat for each host
+        #[arg(long = "allow-host", required = true)]
+        allowed_hosts: Vec<String>,
+
+        /// Actor reference written to provenance; no email or display name
+        #[arg(long, default_value = "actor-radar-local-sync")]
+        actor: String,
+
+        #[arg(long, default_value_t = 8)]
+        max_sources: usize,
+
+        #[arg(long, default_value_t = 50)]
+        max_items_per_source: usize,
+
+        #[arg(long, default_value_t = 200)]
+        max_total_items: usize,
+    },
+
     /// Validate the local CuratedItemExport contract invariants without requiring network access
     ValidateCuratedExport {
         /// Path to a CuratedItemExport JSON file
@@ -204,6 +241,21 @@ async fn main() -> Result<()> {
         } => {
             demo_curate_live(&feed_url, &rule, &output, &actor, max_items).await?;
         }
+        Commands::SyncCurated {
+            opml,
+            rule,
+            output,
+            state,
+            allowed_hosts,
+            actor,
+            max_sources,
+            max_items_per_source,
+            max_total_items,
+        } => {
+            let limits = BoundedSyncLimits::new(max_sources, max_items_per_source, max_total_items)
+                .context("Invalid bounded sync limits")?;
+            sync_curated(&opml, &rule, &output, &state, allowed_hosts, &actor, limits).await?;
+        }
         Commands::ValidateCuratedExport { file } => {
             validate_curated_export(&file)?;
         }
@@ -250,6 +302,7 @@ async fn main() -> Result<()> {
             | Commands::EvaluateRule { .. }
             | Commands::DemoCurate { .. }
             | Commands::DemoCurateLive { .. }
+            | Commands::SyncCurated { .. }
             | Commands::ValidateCuratedExport { .. } => unreachable!("handled before DB setup"),
         },
     }
@@ -333,6 +386,7 @@ struct RuleInput {
 }
 
 /// Flattened feed info for import
+#[derive(Clone)]
 struct FlatFeed {
     title: String,
     xml_url: String,
@@ -343,6 +397,23 @@ struct FlatFeed {
 struct LiveSelection {
     feed: Feed,
     article: Article,
+}
+
+struct SyncSelection {
+    source: FlatFeed,
+    article: Article,
+}
+
+#[derive(Serialize)]
+struct SyncCuratedSummary {
+    status: &'static str,
+    sources_imported: usize,
+    sources_fetched: usize,
+    items_inspected: usize,
+    previously_seen_items: usize,
+    export_id: Option<String>,
+    output_written: bool,
+    state_format: &'static str,
 }
 
 /// Flatten OPML outlines to a list of feeds with folder info
@@ -443,9 +514,10 @@ fn demo_curate(
     opml_file: &PathBuf,
     article_file: &PathBuf,
     rule_file: &PathBuf,
-    output: &PathBuf,
+    output: &Path,
     actor: &str,
 ) -> Result<()> {
+    validate_actor(actor)?;
     let opml_content = std::fs::read_to_string(opml_file).context("Failed to read OPML file")?;
     let opml = OpmlParser::parse(&opml_content).context("Failed to parse OPML file")?;
     let feeds = flatten_outlines(&opml.outlines, None);
@@ -473,11 +545,15 @@ fn demo_curate(
 async fn demo_curate_live(
     feed_url: &str,
     rule_file: &PathBuf,
-    output: &PathBuf,
+    output: &Path,
     actor: &str,
     max_items: usize,
 ) -> Result<()> {
-    anyhow::ensure!(max_items > 0, "--max-items must be greater than zero");
+    validate_actor(actor)?;
+    anyhow::ensure!(
+        (1..=100).contains(&max_items),
+        "--max-items must be between 1 and 100"
+    );
     let input = load_rule_input(rule_file)?;
     let selection = select_live_article(feed_url, &input, max_items).await?;
     let opml = OpmlDocument {
@@ -509,6 +585,136 @@ async fn demo_curate_live(
             "matched": export.rule_evidence.iter().any(|evidence| evidence.decision == "match")
         }))?
     );
+    Ok(())
+}
+
+async fn sync_curated(
+    opml_file: &Path,
+    rule_file: &Path,
+    output: &Path,
+    state_file: &Path,
+    allowed_hosts: Vec<String>,
+    actor: &str,
+    limits: BoundedSyncLimits,
+) -> Result<()> {
+    validate_actor(actor)?;
+    anyhow::ensure!(
+        !allowed_hosts.is_empty() && allowed_hosts.len() <= 64,
+        "--allow-host must contain between 1 and 64 exact hosts"
+    );
+
+    let opml_content = read_bounded_text(opml_file, 512 * 1024, "OPML")?;
+    let opml = OpmlParser::parse(&opml_content).context("Failed to parse OPML file")?;
+    let feeds = flatten_outlines(&opml.outlines, None);
+    anyhow::ensure!(
+        !feeds.is_empty(),
+        "OPML file must contain at least one feed"
+    );
+    anyhow::ensure!(
+        feeds.len() <= limits.max_sources,
+        "OPML source count exceeds --max-sources"
+    );
+
+    let rule_content = read_bounded_text(rule_file, 64 * 1024, "rule")?;
+    let rule_input: RuleInput = serde_json::from_str(&rule_content).context("Invalid rule JSON")?;
+    validate_rule_input(&rule_input)?;
+    let evaluator =
+        RuleEvaluator::new(vec![build_rule(&rule_input)]).context("Failed to compile rule")?;
+    let fetcher = FeedFetcher::with_config(FetcherConfig::for_public_sources(allowed_hosts))
+        .context("Failed to create bounded public feed fetcher")?;
+    let mut state = load_sync_state(state_file)?;
+
+    let source_hashes = feeds
+        .iter()
+        .map(|feed| sha256_tag(feed.xml_url.as_bytes()))
+        .collect::<Vec<_>>();
+    let mut inspected_hashes = Vec::new();
+    let mut selection = None;
+    let mut sources_fetched = 0;
+    let mut items_inspected = 0;
+    let mut previously_seen_items = 0;
+
+    'sources: for source in &feeds {
+        if items_inspected >= limits.max_total_items {
+            break;
+        }
+        let (feed, items) = fetcher.fetch(&source.xml_url).await.with_context(|| {
+            format!(
+                "Failed to synchronize source {}",
+                sha256_tag(source.xml_url.as_bytes())
+            )
+        })?;
+        sources_fetched += 1;
+
+        for item in items.into_iter().take(limits.max_items_per_source) {
+            if items_inspected >= limits.max_total_items {
+                break 'sources;
+            }
+            items_inspected += 1;
+            let item_hash = sha256_tag(item.guid.as_bytes());
+            inspected_hashes.push(item_hash.clone());
+            if state.has_seen(&item_hash) {
+                previously_seen_items += 1;
+                continue;
+            }
+
+            let article = Article::from_feed_item(feed.id, item);
+            if selection.is_none()
+                && evaluator
+                    .evaluate(&article, article.feed_id)
+                    .action
+                    .is_some()
+            {
+                selection = Some(SyncSelection {
+                    source: source.clone(),
+                    article,
+                });
+            }
+        }
+    }
+
+    let (export_id, selected_export_hash) = if let Some(selection) = selection {
+        let mut source_order = feeds.clone();
+        if let Some(index) = source_order
+            .iter()
+            .position(|source| source.xml_url == selection.source.xml_url)
+        {
+            source_order.swap(0, index);
+        }
+        let export =
+            build_curated_export(&opml, &source_order, &selection.article, &rule_input, actor)?;
+        let serialized = serialize_curated_export(&export)?;
+        let export_hash = sha256_tag(serialized.as_bytes());
+        atomic_write(output, serialized.as_bytes())
+            .context("Failed to write synchronized export")?;
+        (Some(export.export_id), Some(export_hash))
+    } else {
+        if output.exists() {
+            std::fs::remove_file(output).context("Failed to remove stale synchronized export")?;
+        }
+        (None, None)
+    };
+
+    state
+        .advance(source_hashes, inspected_hashes, selected_export_hash)
+        .context("Refusing unsafe local sync state")?;
+    write_sync_state(state_file, &state)?;
+
+    let summary = SyncCuratedSummary {
+        status: if export_id.is_some() {
+            "ready"
+        } else {
+            "empty"
+        },
+        sources_imported: feeds.len(),
+        sources_fetched,
+        items_inspected,
+        previously_seen_items,
+        output_written: export_id.is_some(),
+        export_id,
+        state_format: feedmind_sync::local::LOCAL_SYNC_SNAPSHOT_FORMAT,
+    };
+    println!("{}", serde_json::to_string_pretty(&summary)?);
     Ok(())
 }
 
@@ -545,18 +751,83 @@ async fn select_live_article(
     })
 }
 
-fn write_curated_export(output: &PathBuf, export: &CuratedItemExport) -> Result<()> {
+fn write_curated_export(output: &Path, export: &CuratedItemExport) -> Result<()> {
+    let json = serialize_curated_export(export)?;
+    atomic_write(output, json.as_bytes()).context("Failed to write CuratedItemExport JSON")
+}
+
+fn serialize_curated_export(export: &CuratedItemExport) -> Result<String> {
     export
         .validate_client_safe()
         .context("Refusing to write a CuratedItemExport that is not client-safe")?;
-    let json = format!("{}\n", serde_json::to_string_pretty(export)?);
+    Ok(format!("{}\n", serde_json::to_string_pretty(export)?))
+}
 
-    if let Some(parent) = output.parent() {
+fn load_sync_state(path: &Path) -> Result<LocalSyncSnapshot> {
+    if !path.exists() {
+        return Ok(LocalSyncSnapshot::empty());
+    }
+    let raw = read_bounded_text(path, 1024 * 1024, "sync state")?;
+    let state: LocalSyncSnapshot =
+        serde_json::from_str(&raw).context("Invalid local sync state JSON")?;
+    state
+        .validate()
+        .context("Local sync state failed validation")?;
+    Ok(state)
+}
+
+fn write_sync_state(path: &Path, state: &LocalSyncSnapshot) -> Result<()> {
+    state
+        .validate()
+        .context("Refusing unsafe local sync state")?;
+    let serialized = format!("{}\n", serde_json::to_string_pretty(state)?);
+    atomic_write(path, serialized.as_bytes()).context("Failed to write local sync state")
+}
+
+fn read_bounded_text(path: &Path, max_bytes: usize, label: &str) -> Result<String> {
+    let metadata = std::fs::metadata(path).with_context(|| format!("Failed to inspect {label}"))?;
+    anyhow::ensure!(
+        metadata.len() <= max_bytes as u64,
+        "{label} exceeds the {max_bytes}-byte limit"
+    );
+    let bytes = std::fs::read(path).with_context(|| format!("Failed to read {label}"))?;
+    anyhow::ensure!(
+        bytes.len() <= max_bytes,
+        "{label} exceeds the {max_bytes}-byte limit"
+    );
+    String::from_utf8(bytes).with_context(|| format!("{label} must be UTF-8"))
+}
+
+fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
+    if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
             std::fs::create_dir_all(parent).context("Failed to create output directory")?;
         }
     }
-    std::fs::write(output, json).context("Failed to write CuratedItemExport JSON")
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .context("Output path must have a UTF-8 file name")?;
+    let temporary = path.with_file_name(format!(".{file_name}.{}.tmp", Uuid::new_v4()));
+    std::fs::write(&temporary, bytes).context("Failed to write temporary output")?;
+    if let Err(error) = std::fs::rename(&temporary, path) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(error).context("Failed to atomically replace output");
+    }
+    Ok(())
+}
+
+fn validate_actor(actor: &str) -> Result<()> {
+    anyhow::ensure!(
+        !actor.is_empty()
+            && actor.len() <= 64
+            && actor
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || "-_:".contains(character))
+            && !actor.contains('@'),
+        "actor must be a non-PII reference of at most 64 ASCII characters"
+    );
+    Ok(())
 }
 
 fn validate_curated_export(file: &PathBuf) -> Result<()> {
@@ -586,7 +857,21 @@ fn load_article(article_file: &PathBuf) -> Result<Article> {
 
 fn load_rule_input(rule_file: &PathBuf) -> Result<RuleInput> {
     let rule_content = std::fs::read_to_string(rule_file).context("Failed to read rule JSON")?;
-    serde_json::from_str(&rule_content).context("Invalid rule JSON")
+    let input = serde_json::from_str(&rule_content).context("Invalid rule JSON")?;
+    validate_rule_input(&input)?;
+    Ok(input)
+}
+
+fn validate_rule_input(input: &RuleInput) -> Result<()> {
+    anyhow::ensure!(
+        !input.name.trim().is_empty() && input.name.chars().count() <= 200,
+        "rule name must contain between 1 and 200 characters"
+    );
+    anyhow::ensure!(
+        !input.pattern.is_empty() && input.pattern.chars().count() <= 900,
+        "rule pattern must contain between 1 and 900 characters"
+    );
+    Ok(())
 }
 
 fn build_rule(input: &RuleInput) -> Rule {
@@ -641,7 +926,10 @@ fn build_curated_export(
         })
         .unwrap_or_else(|| format!("{}:{}:not_evaluated", input.name, input.pattern));
     let evidence_hash = sha256_tag(evidence_material.as_bytes());
-    let export_id = format!("export:{}", article.guid);
+    // Feed GUIDs are often raw URLs. Keep public identifiers stable without
+    // copying source URLs or private path material into the portable export.
+    let item_reference = &sha256_hex(article.guid.as_bytes())[..24];
+    let export_id = format!("export:{item_reference}");
     let provenance_id = format!("provenance:{export_id}");
     let artifact_hash = sha256_tag(
         format!("{export_id}:{content_hash}:{source_url_hash}:{evidence_hash}").as_bytes(),
@@ -674,24 +962,34 @@ fn build_curated_export(
         privacy_classification: "normal".to_string(),
         item: CuratedExportItem {
             item_id: article.id.to_string(),
-            title: article.title.clone(),
+            title: truncate_for_export(&article.title, 300),
             content_excerpt: content_excerpt(article),
             content_hash: content_hash.clone(),
             source_url_hash,
             published_at: article
                 .published_at
                 .map(|date| date.to_rfc3339_opts(SecondsFormat::Secs, true)),
-            tags: article.categories.clone(),
+            tags: article
+                .categories
+                .iter()
+                .take(64)
+                .map(|tag| truncate_for_export(tag, 64))
+                .collect(),
         },
         source_ref: CuratedSourceRef {
-            source_id: format!("source:{}", article.guid),
+            source_id: format!("source:{item_reference}"),
             source_type: "feed_item".to_string(),
             origin_product: CURATED_ITEM_EXPORT_ORIGIN.to_string(),
             content_hash,
             provenance_id: provenance_id.clone(),
-            opml_title: opml.title.clone(),
+            opml_title: opml
+                .title
+                .as_deref()
+                .map(|title| truncate_for_export(title, 300)),
             opml_feed_count: feeds.len(),
-            first_feed_title: feeds.first().map(|feed| feed.title.clone()),
+            first_feed_title: feeds
+                .first()
+                .map(|feed| truncate_for_export(&feed.title, 300)),
         },
         curation: CuratedExportCuration {
             decision: if result.action.is_some() {
@@ -732,6 +1030,10 @@ fn build_curated_export(
             timestamp: created_at,
         },
     })
+}
+
+fn truncate_for_export(value: &str, max_chars: usize) -> String {
+    value.chars().take(max_chars).collect()
 }
 
 fn content_excerpt(article: &Article) -> String {
@@ -1166,5 +1468,18 @@ mod tests {
         assert_eq!(actual["constraints"]["contains_secrets"], false);
         assert_eq!(actual["constraints"]["contains_byok_material"], false);
         assert_eq!(actual["constraints"]["allow_downstream_execution"], false);
+        assert!(!actual["export_id"].as_str().unwrap().contains("demo-1"));
+        assert!(!actual["source_ref"]["source_id"]
+            .as_str()
+            .unwrap()
+            .contains("demo-1"));
+    }
+
+    #[test]
+    fn public_actor_reference_rejects_email_and_unbounded_values() {
+        assert!(validate_actor("actor-radar-local-sync").is_ok());
+        assert!(validate_actor("person@example.com").is_err());
+        assert!(validate_actor(&"a".repeat(65)).is_err());
+        assert!(validate_actor("actor with spaces").is_err());
     }
 }

@@ -27,6 +27,7 @@ jobs:
           python3 -m json.tool examples/demo-rule.json >/dev/null
           python3 -m json.tool examples/expected-curated-export.json >/dev/null
           python3 -m json.tool schemas/curated-item-export.v0.1.schema.json >/dev/null
+          python3 -m json.tool schemas/local-sync-snapshot.v0.1.schema.json >/dev/null
       - name: Build deterministic CuratedItemExport
         run: |
           set -euo pipefail
@@ -39,6 +40,8 @@ jobs:
         run: cargo run -p feedmind-cli -- validate-curated-export --file out/curated.json
       - name: Golden output must not drift
         run: diff -u examples/expected-curated-export.json out/curated.json
+      - name: Bounded live-sync command is exposed without network access
+        run: cargo run -p feedmind-cli -- sync-curated --help
 
   local-product-proof:
     name: Dioxus curated review proof
