@@ -4,6 +4,8 @@
 
 Le lancement produit cible n'est pas une simple démo web. C'est une distribution self-hostable et reproductible du moteur de veille : CLI, API, worker, base PostgreSQL/Redis, puis surface produit Dioxus. La distribution web/native/desktop/mobile sera choisie après preuve du parcours Dioxus, pas présupposée.
 
+Current readiness cockpit: [`product-readiness.md`](product-readiness.md).
+
 ## Release train
 
 ### RC0 — Core proof

@@ -16,10 +16,12 @@ A local-first feed intelligence pipeline: OPML, RSS, Atom and JSON Feed into exp
 | | |
 | --- | --- |
 | Maturity | **Dojo** — usable CLI/API proofs, incomplete product workflow |
-| Works today | local OPML parsing, bounded allowlisted HTTPS synchronization, rule evaluation, payload-minimized replay state, client-safe exports and one read-only Dioxus curated-review proof |
-| Not scale-ready | interactive import, hosted operations, multi-user guarantees, scheduling and production observability |
+| Works today | local OPML parsing, bounded allowlisted HTTPS synchronization, rule evaluation, payload-minimized replay state, worker scheduler code with validated refresh-interval bounds and one-shot start guard, client-safe exports and one read-only Dioxus curated-review proof |
+| Not scale-ready | interactive import, hosted operations, multi-user guarantees, and production observability; hosted operations remain unproved |
 | Product UI proof | runnable Dioxus web slice over either the deterministic golden or a validated live-sync export, with pinned Client Kit provenance and Chromium/Firefox/WebKit mobile-width checks; not an API or release |
 | Historical IDs | `rumble-feed-mind` and `feedmind-*` remain technical package/contract IDs |
+
+Canonical readiness cockpit: [`docs/product-readiness.md`](docs/product-readiness.md).
 
 Temporary RustSec waivers documented in the repository must be removed or renewed before their stated expiry; they are not a production-readiness claim.
 
