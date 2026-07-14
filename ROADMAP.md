@@ -1,29 +1,24 @@
 # Roadmap
 
-This is a contribution map, not a startup roadmap or a delivery promise. It shows where help is useful while keeping scope explicit.
+This is a contribution map, not a startup roadmap or a delivery promise. Official maturity remains Dojo, and the canonical readiness cockpit lives in [`docs/product-readiness.md`](docs/product-readiness.md).
 
 ## Now
 
-- make dogfooding evidence visible through commands, fixtures, CI checks, generated reports, or linked docs;
-- stabilize runtime tests and feed fixtures;
-- improve classification logs;
-- maintain the separated-role, transaction-local tenant and forced-RLS guarantees from ADR 0006;
-- document advisory waivers and known limits;
-- keep the read-only Dioxus curated-review proof, its portable contract and browser gate green;
-- maintain the bounded, exact-allowlist local synchronization path and its dated proof;
-- keep Rust CI, security, and release checks green.
+- keep the deterministic local/CI proofs green;
+- keep the read-only Dioxus review and bounded live-sync proofs green;
+- prepare a private pilot/staging path with real sources;
+- tighten logging classification plus retention/BYOK/SSRF boundaries;
+- maintain the separated-role tenant and forced-RLS guarantees from ADR 0006.
 
 ## Next
 
-- review the bounded local-source contract and decide whether the next source is a sandboxed hosted fetcher or local-only storage;
-- add multiple example curated-item exports without embedding third-party live content;
-- improve ingest and rule errors;
-- add contract tests around BYOK, export, and fail-closed behavior;
-- prepare the first alpha-quality pipeline release.
+- run the private pilot on real sources with a staged runbook;
+- add interactive OPML import and multi-item review;
+- harden retention/BYOK/SSRF sandboxing and operational checks;
+- keep release/provenance checks ready for a later alpha decision.
 
 ## Later
 
-- interactive OPML import and scheduled synchronization behind explicit auth and retention contracts;
+- alpha release only after the private pilot, review, sandbox, and operations gates are proven;
 - broader feed and source integrations;
-- release provenance for curated outputs;
-- hosted or multi-user usage only when privacy, SSRF isolation, retention and provider boundaries are explicit.
+- hosted or multi-user usage only when privacy, SSRF isolation, retention, and provider boundaries are explicit.
