@@ -181,6 +181,48 @@ impl AppConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
+    use std::sync::{Mutex, MutexGuard};
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    struct EnvGuard {
+        _lock: MutexGuard<'static, ()>,
+        vars: Vec<(String, Option<String>)>,
+    }
+
+    impl EnvGuard {
+        fn set(pairs: &[(&str, Option<&str>)]) -> Self {
+            let lock = ENV_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let vars = pairs
+                .iter()
+                .map(|(key, value)| {
+                    let key = (*key).to_string();
+                    let previous = env::var(&key).ok();
+                    match value {
+                        Some(value) => env::set_var(&key, value),
+                        None => env::remove_var(&key),
+                    }
+                    (key, previous)
+                })
+                .collect();
+
+            Self { _lock: lock, vars }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            for (key, previous) in self.vars.drain(..).rev() {
+                match previous {
+                    Some(value) => env::set_var(key, value),
+                    None => env::remove_var(key),
+                }
+            }
+        }
+    }
 
     #[test]
     fn stripe_is_disabled_when_secret_key_is_absent() {
@@ -214,5 +256,53 @@ mod tests {
         };
 
         assert!(config.is_configured());
+    }
+
+    #[test]
+    fn app_config_loads_deterministic_values_from_environment() {
+        let _env = EnvGuard::set(&[
+            ("HOST", Some("127.0.0.1")),
+            ("PORT", Some("9999")),
+            ("DATABASE_URL", Some("postgres://app:app@localhost/app")),
+            (
+                "AUTH_DATABASE_URL",
+                Some("postgres://auth:auth@localhost/auth"),
+            ),
+            (
+                "WORKER_DATABASE_URL",
+                Some("postgres://worker:worker@localhost/worker"),
+            ),
+            ("REDIS_URL", Some("redis://localhost:6379/0")),
+            ("JWT_SECRET", Some("jwt-fixture")),
+            ("JWT_EXPIRATION", Some("3600")),
+            ("MASTER_KEY", Some("base64-fixture")),
+            ("MASTER_KEY_VERSION", Some("9")),
+            ("ENVIRONMENT", Some("production")),
+            ("STRIPE_SECRET_KEY", Some("sk_test_fixture")),
+            ("STRIPE_PUBLISHABLE_KEY", None),
+            ("STRIPE_WEBHOOK_SECRET", Some("whsec_fixture")),
+            ("STRIPE_PRICE_PRO_MONTHLY", None),
+            ("STRIPE_PRICE_PRO_ANNUAL", None),
+            ("STRIPE_PRICE_TEAM_MONTHLY", None),
+            ("STRIPE_PRICE_TEAM_ANNUAL", None),
+            ("STRIPE_PRICE_AI_TOKENS", None),
+            ("STRIPE_PRICE_API_CALLS", None),
+        ]);
+
+        let config = AppConfig::load().expect("app config should load from environment");
+
+        assert_eq!(config.host, "127.0.0.1");
+        assert_eq!(config.port, 9999);
+        assert_eq!(config.jwt_expiration, 3600);
+        assert_eq!(config.master_key_version, 9);
+        assert_eq!(config.environment, "production");
+        assert_eq!(
+            config.worker_database_url.as_deref(),
+            Some("postgres://worker:worker@localhost/worker")
+        );
+        assert!(config.billing_enabled());
+        assert_eq!(config.stripe.secret_key(), "sk_test_fixture");
+        assert_eq!(config.stripe.webhook_secret(), "whsec_fixture");
+        assert!(config.stripe.stripe_publishable_key.is_none());
     }
 }

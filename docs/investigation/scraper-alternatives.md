@@ -2,12 +2,11 @@
 
 **Date:** 2026-07-03  
 **Advisory:** RUSTSEC-2025-0057 (fxhash via scraper)  
-**Expiry:** 2026-09-30 (waiver expiration deadline per ADR 0005)  
-**Status:** Under evaluation; removal target Q3 2026
+**Status:** Resolved by upgrade to `scraper 0.27.0` in PR #79; `cargo tree -i fxhash` returns no package; `cargo deny` / `cargo audit` are green
 
 ## Summary
 
-`scraper` (CSS selector + HTML parsing library, built on `select.rs` + `html5ever`) carries transitive vulnerability RUSTSEC-2025-0057 via fxhash (hash table hasher). Current usage is limited to article extraction in `crates/ingest/src/extractor.rs`.
+`scraper` (CSS selector + HTML parsing library, built on `select.rs` + `html5ever`) carried transitive vulnerability RUSTSEC-2025-0057 via fxhash (hash table hasher). Current usage is limited to article extraction in `crates/ingest/src/extractor.rs`. Completion note (2026-07-14): the waiver was removed after upgrading `scraper` to 0.27.0 in PR #79; `cargo tree -i fxhash` no longer matches any package.
 
 ## Investigated Options
 
@@ -54,7 +53,9 @@
 
 ## Recommendation
 
-**Defer to Q3 2026 (post-2026-09-30 evaluation cycle).** Options 1 and 2 do not meaningfully reduce advisory risk or dependency complexity. Option 3 is architecturally sound but requires coordination with Gear Loader team and is a 3-4 week effort.
+**Completion note (2026-07-14):** resolved by upgrading `scraper` to 0.27.0 in PR #79; `cargo tree -i fxhash` has no match, and `cargo deny` / `cargo audit` are green.
+
+**Historical recommendation:** Defer to Q3 2026 (post-2026-09-30 evaluation cycle). Options 1 and 2 do not meaningfully reduce advisory risk or dependency complexity. Option 3 is architecturally sound but requires coordination with Gear Loader team and is a 3-4 week effort.
 
 ### Interim Plan
 
@@ -77,4 +78,4 @@ If no upstream patches exist by 2026-08-31, evaluate forcing safe version constr
 
 ---
 
-**Next Review:** 2026-08-31 (29-day deadline before waiver expiry)
+**Archive note:** Closed by PR #79; no follow-up review scheduled.
