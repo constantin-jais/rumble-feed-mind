@@ -73,7 +73,7 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Password hashing
 argon2 = "0.5"
-password-hash = { version = "0.5", features = ["getrandom"] }
+password-hash = { version = "0.6", features = ["getrandom"] }
 
 # JWT
 jsonwebtoken = "10.3"
