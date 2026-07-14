@@ -44,7 +44,7 @@ fn default_refresh_interval() -> u64 {
 pub(crate) fn refresh_interval_duration(refresh_interval: u64) -> anyhow::Result<Duration> {
     if !(MIN_REFRESH_INTERVAL_SECONDS..=MAX_REFRESH_INTERVAL_SECONDS).contains(&refresh_interval) {
         anyhow::bail!(
-            "WORKER_REFRESH_INTERVAL must be between {MIN_REFRESH_INTERVAL_SECONDS} and {MAX_REFRESH_INTERVAL_SECONDS} seconds (inclusive)"
+            "REFRESH_INTERVAL must be between {MIN_REFRESH_INTERVAL_SECONDS} and {MAX_REFRESH_INTERVAL_SECONDS} seconds (inclusive)"
         );
     }
 
@@ -147,6 +147,23 @@ mod tests {
             "postgres://worker:worker@localhost/worker"
         );
         assert_eq!(config.redis_url, "redis://localhost:6379/1");
+    }
+
+    #[test]
+    fn worker_config_loads_explicit_refresh_interval_of_600_seconds() {
+        let _env = EnvGuard::set(&[
+            (
+                "WORKER_DATABASE_URL",
+                Some("postgres://worker:worker@localhost/worker"),
+            ),
+            ("REDIS_URL", Some("redis://localhost:6379/1")),
+            ("MASTER_KEY", Some("base64-fixture")),
+            ("REFRESH_INTERVAL", Some("600")),
+        ]);
+
+        let config = WorkerConfig::load().expect("explicit refresh interval should load");
+
+        assert_eq!(config.refresh_interval, 600);
     }
 
     #[test]

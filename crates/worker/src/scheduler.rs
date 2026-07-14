@@ -200,10 +200,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cron_expression_validity() {
-        let job = CronJob::new_async("0 */5 * * * *", |_uuid, _lock| Box::pin(async move {}));
-        assert!(job.is_ok(), "feed refresh cron expression should parse");
-
+    fn test_periodic_job_cron_expression_validity() {
         let job = CronJob::new_async("0 0 3 * * *", |_uuid, _lock| Box::pin(async move {}));
         assert!(job.is_ok(), "cleanup cron expression should parse");
 
