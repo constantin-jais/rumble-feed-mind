@@ -1,6 +1,7 @@
 //! Job scheduler for periodic tasks
 
 use redis::aio::ConnectionManager;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio_cron_scheduler::{Job as CronJob, JobScheduler};
 use tracing::{error, info};
@@ -14,6 +15,7 @@ pub struct Scheduler {
     cron: JobScheduler,
     redis_url: String,
     refresh_interval: Duration,
+    started: AtomicBool,
 }
 
 impl Scheduler {
@@ -26,11 +28,18 @@ impl Scheduler {
             cron,
             redis_url: config.redis_url.clone(),
             refresh_interval,
+            started: AtomicBool::new(false),
         })
     }
 
     /// Start the scheduler with all configured jobs
     pub async fn start(&self) -> anyhow::Result<()> {
+        self.started
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map_err(|_| {
+                anyhow::anyhow!("scheduler already started; create a new Scheduler instance")
+            })?;
+
         info!("Starting job scheduler");
 
         self.schedule_feed_refresh().await?;
@@ -260,10 +269,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn scheduler_registers_all_periodic_jobs_without_start() {
+    async fn scheduler_start_registers_all_periodic_jobs_once() {
         let config = test_config(300);
 
-        let scheduler = Scheduler::new(&config)
+        let mut scheduler = Scheduler::new(&config)
             .await
             .expect("scheduler should be created from worker config");
 
@@ -275,27 +284,36 @@ mod tests {
         );
 
         scheduler
-            .schedule_feed_refresh()
+            .start()
             .await
-            .expect("feed refresh should register");
-        assert_eq!(scheduled_job_count(&scheduler).await.unwrap(), 1);
+            .expect("first start should register all jobs");
+
+        assert_eq!(
+            scheduled_job_count(&scheduler)
+                .await
+                .expect("jobs should be readable after start"),
+            4
+        );
+
+        let err = scheduler
+            .start()
+            .await
+            .expect_err("second start should be rejected");
+        assert!(
+            err.to_string().contains("already started"),
+            "unexpected scheduler start error: {err:#}"
+        );
+
+        assert_eq!(
+            scheduled_job_count(&scheduler)
+                .await
+                .expect("jobs should remain registered after failed restart"),
+            4
+        );
 
         scheduler
-            .schedule_cleanup()
+            .shutdown()
             .await
-            .expect("cleanup should register");
-        assert_eq!(scheduled_job_count(&scheduler).await.unwrap(), 2);
-
-        scheduler
-            .schedule_dunning_check()
-            .await
-            .expect("dunning check should register");
-        assert_eq!(scheduled_job_count(&scheduler).await.unwrap(), 3);
-
-        scheduler
-            .schedule_webhook_cleanup()
-            .await
-            .expect("webhook cleanup should register");
-        assert_eq!(scheduled_job_count(&scheduler).await.unwrap(), 4);
+            .expect("scheduler should shut down cleanly");
     }
 }
