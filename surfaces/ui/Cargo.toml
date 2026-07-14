@@ -12,6 +12,7 @@ web = [
     "dioxus/cli-config",
     "dioxus/warnings",
     "dioxus/web",
+    "dep:web-sys",
 ]
 
 [[bin]]
@@ -22,9 +23,7 @@ path = "src/main.rs"
 dioxus = { workspace = true }
 feedmind-sync = { workspace = true }
 serde_json = { workspace = true }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3", features = ["Location", "Window"] }
+web-sys = { version = "0.3", features = ["Location", "Window"], optional = true }
 
 [build-dependencies]
 feedmind-sync = { workspace = true }

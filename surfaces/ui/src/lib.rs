@@ -212,6 +212,15 @@ mod tests {
         assert!(!html.contains(&export.item.content_hash));
     }
 
+    #[cfg(feature = "web")]
+    #[test]
+    fn web_sys_location_and_window_features_are_available_for_all_features() {
+        let compile_check = |window: &web_sys::Window| {
+            let _ = window.location();
+        };
+        let _ = compile_check;
+    }
+
     #[test]
     fn empty_fixture_is_honest() {
         let html = dioxus_ssr::render_element(render_state(load_review("  ")));

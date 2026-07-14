@@ -5,10 +5,10 @@
 | Identifiant | `feed-radar.dioxus-product-proof.v1` |
 | Version | `1.0.0` |
 | Date | 2026-07-12 |
-| Statut | verticale locale fusionnée par #69 ; extension live-sync locale prouvée le 2026-07-13 ; promotion publique toujours bloquée par revue humaine et absence de runtime interactif |
+| Statut | verticale locale fusionnée par #69 ; extension live-sync locale prouvée le 2026-07-13 ; `phase_4.dioxus-product-proof` done après preuves locales ; promotion publique toujours bloquée par revue humaine et absence de runtime interactif |
 | Epic | [#1](https://github.com/libre-ai/feed-radar/issues/1) |
 | Issue d’implémentation unique | [#66](https://github.com/libre-ai/feed-radar/issues/66) |
-| Jalon goals | `phase_4.dioxus-product-proof`, maintenu `pending` jusqu’à preuve complète fusionnée |
+| Jalon goals | `phase_4.dioxus-product-proof`, `done` après preuve complète fusionnée |
 
 ## Décision en une phrase
 
@@ -304,7 +304,7 @@ L’acceptation fonctionnelle exige le titre golden, `saved`, la raison, l’exp
 - wasm32, bundle, SSR et E2E mobile passent en CI ;
 - aucun secret/PII/BYOK, stockage navigateur ou asset distant ;
 - README/runbook décrivent honnêtement la preuve locale et ses limites ;
-- `dioxus-product-proof` n’est passé à `done` qu’après ces preuves ;
+- `dioxus-product-proof` a été passé à `done` après ces preuves ;
 - #1 reste ouverte tant que ses propres critères plus larges ne sont pas satisfaits.
 
 ## Non-objectifs
