@@ -59,3 +59,63 @@ impl WorkerConfig {
         Ok(worker_config)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    struct EnvGuard {
+        vars: Vec<(String, Option<String>)>,
+    }
+
+    impl EnvGuard {
+        fn set(pairs: &[(&str, &str)]) -> Self {
+            let vars = pairs
+                .iter()
+                .map(|(key, value)| {
+                    let key = (*key).to_string();
+                    let previous = env::var(&key).ok();
+                    env::set_var(&key, value);
+                    (key, previous)
+                })
+                .collect();
+
+            Self { vars }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            for (key, previous) in self.vars.drain(..).rev() {
+                match previous {
+                    Some(value) => env::set_var(key, value),
+                    None => env::remove_var(key),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn worker_config_loads_defaults_from_environment() {
+        let _env = EnvGuard::set(&[
+            (
+                "WORKER_DATABASE_URL",
+                "postgres://worker:worker@localhost/worker",
+            ),
+            ("REDIS_URL", "redis://localhost:6379/1"),
+            ("MASTER_KEY", "base64-fixture"),
+        ]);
+
+        let config = WorkerConfig::load().expect("worker config should load from environment");
+
+        assert_eq!(config.concurrent_fetches, 50);
+        assert_eq!(config.refresh_interval, 900);
+        assert_eq!(config.master_key_version, 1);
+        assert_eq!(
+            config.worker_database_url,
+            "postgres://worker:worker@localhost/worker"
+        );
+        assert_eq!(config.redis_url, "redis://localhost:6379/1");
+    }
+}

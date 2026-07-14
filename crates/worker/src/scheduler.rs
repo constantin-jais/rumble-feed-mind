@@ -181,6 +181,8 @@ async fn enqueue_webhook_cleanup(redis_url: &str) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_cron_expression_validity() {
         // These should parse without error
@@ -194,5 +196,21 @@ mod tests {
             // Just verify the format is valid
             assert!(!expr.is_empty());
         }
+    }
+
+    #[tokio::test]
+    async fn scheduler_can_be_created_from_worker_config() {
+        let config = WorkerConfig {
+            worker_database_url: "postgres://worker:worker@localhost/worker".to_string(),
+            redis_url: "redis://localhost:6379/1".to_string(),
+            concurrent_fetches: 50,
+            refresh_interval: 900,
+            master_key: "base64-fixture".to_string(),
+            master_key_version: 1,
+        };
+
+        let scheduler = Scheduler::new(&config).await;
+
+        assert!(scheduler.is_ok());
     }
 }

@@ -181,6 +181,38 @@ impl AppConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
+
+    struct EnvGuard {
+        vars: Vec<(String, Option<String>)>,
+    }
+
+    impl EnvGuard {
+        fn set(pairs: &[(&str, &str)]) -> Self {
+            let vars = pairs
+                .iter()
+                .map(|(key, value)| {
+                    let key = (*key).to_string();
+                    let previous = env::var(&key).ok();
+                    env::set_var(&key, value);
+                    (key, previous)
+                })
+                .collect();
+
+            Self { vars }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            for (key, previous) in self.vars.drain(..).rev() {
+                match previous {
+                    Some(value) => env::set_var(key, value),
+                    None => env::remove_var(key),
+                }
+            }
+        }
+    }
 
     #[test]
     fn stripe_is_disabled_when_secret_key_is_absent() {
@@ -214,5 +246,31 @@ mod tests {
         };
 
         assert!(config.is_configured());
+    }
+
+    #[test]
+    fn app_config_loads_flattened_stripe_settings_from_environment() {
+        let _env = EnvGuard::set(&[
+            ("DATABASE_URL", "postgres://app:app@localhost/app"),
+            ("AUTH_DATABASE_URL", "postgres://auth:auth@localhost/auth"),
+            (
+                "WORKER_DATABASE_URL",
+                "postgres://worker:worker@localhost/worker",
+            ),
+            ("REDIS_URL", "redis://localhost:6379/0"),
+            ("JWT_SECRET", "jwt-fixture"),
+            ("MASTER_KEY", "base64-fixture"),
+            ("STRIPE_SECRET_KEY", "sk_test_fixture"),
+            ("STRIPE_WEBHOOK_SECRET", "whsec_fixture"),
+        ]);
+
+        let config = AppConfig::load().expect("app config should load from environment");
+
+        assert_eq!(config.host, "0.0.0.0");
+        assert_eq!(config.port, 3001);
+        assert_eq!(config.master_key_version, 1);
+        assert!(config.billing_enabled());
+        assert_eq!(config.stripe.secret_key(), "sk_test_fixture");
+        assert_eq!(config.stripe.webhook_secret(), "whsec_fixture");
     }
 }
