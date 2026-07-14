@@ -105,7 +105,7 @@ status = "done"
 
 [phases.phase_4]
 name = "Rust UI et distribution"
-status = "in-progress"
+status = "done"
 
 [[phases.phase_4.sub_milestones]]
 id = "adapters-direct"
@@ -125,7 +125,7 @@ status = "done"
 [[phases.phase_4.sub_milestones]]
 id = "dioxus-product-proof"
 name = "Premier parcours produit Dioxus runnable et vérifiable (après contrats UI Portal)"
-status = "pending"
+status = "done"
 
 [[phases.phase_4.sub_milestones]]
 id = "release-matrix"
