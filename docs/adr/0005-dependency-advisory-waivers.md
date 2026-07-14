@@ -2,9 +2,10 @@
 
 ## Status
 
-Accepted temporary waiver. Expires: **2026-09-30**.
+Accepted temporary waiver. Expires: **2026-09-30**. Remaining waivers: async-stripe only.
 
 Resolution update (2026-07-12): `validator_derive 0.20.1` replaces `proc-macro-error2` with maintained `proc-macro-error3`; the `RUSTSEC-2026-0173` waiver is removed. The original decision table remains as the historical acceptance record.
+Resolution update (2026-07-14): `scraper 0.27.0` no longer depends on `fxhash`; the `RUSTSEC-2025-0057` waiver is removed after PR #79. `cargo tree -i fxhash` returns no package, and `cargo deny` / `cargo audit` are green.
 
 ## Context
 
@@ -12,7 +13,7 @@ Resolution update (2026-07-12): `validator_derive 0.20.1` replaces `proc-macro-e
 
 | Advisory | Path | Reason for temporary waiver | Current impact | Removal plan |
 | --- | --- | --- | --- | --- |
-| `RUSTSEC-2025-0057` | `fxhash` via `scraper` | Feed parsing/extraction path; replacement requires ingestion dependency evaluation. | Local parsing path; no trusted multi-tenant runtime claimed. | Evaluate replacing `scraper` or moving reusable extraction pressure to Gear Loader. |
+| `RUSTSEC-2025-0057` | `fxhash` via `scraper` | Resolved by upgrading `scraper 0.27.0` in PR #79; no `fxhash` remains in the graph. | No current impact; `cargo tree -i fxhash` returns no package. | Completed via the `scraper 0.27.0` upgrade and waiver removal in PR #79. |
 | `RUSTSEC-2026-0174` | `http-types` via optional `async-stripe` feature | Stripe is now isolated as an optional adapter, but all-features supply-chain audit still sees the dependency. | Payment adapter is optional and not part of the no-secret quickstart. | Replace/remove `async-stripe` or move to a safer payment adapter before waiver expiry (I4 follow-up). |
 | `RUSTSEC-2024-0384` | `instant` via optional `async-stripe` path | Same optional Stripe adapter path. | Same optional Stripe path. | Replace/remove `async-stripe` or move to a safer payment adapter before waiver expiry (I4 follow-up). |
 | `RUSTSEC-2026-0173` | `proc-macro-error2` via UI/validator deps | Needs dependency upgrade/replacement evaluation. | Build-time/proc-macro path; no scale-ready claim. | Upgrade or replace affected dependencies (I6). |
@@ -33,7 +34,7 @@ This waiver does **not** authorize:
 ## Required follow-up before expiry
 
 1. Replace/remove the optional `async-stripe` adapter or move to a safer payment adapter (covers RUSTSEC-2026-0174, 2024-0384, 2026-0097). Default/core build isolation is complete, but all-features audit still requires the waiver.
-2. Evaluate replacing `scraper` or its affected transitive path (RUSTSEC-2025-0057).
+2. ~~Evaluate replacing `scraper` or its affected transitive path (RUSTSEC-2025-0057).~~ Resolved by upgrading `scraper 0.27.0` in PR #79; `cargo tree -i fxhash` returns no package.
 3. ~~Upgrade or replace UI/validator dependencies pulling unmaintained proc-macro crates (RUSTSEC-2026-0173).~~ Resolved by `validator_derive 0.20.1` on 2026-07-12.
 4. Resolve `quick-xml` advisories via upstream patch or safe version constraint (RUSTSEC-2026-0194, 2026-0195); deadline 2026-09-30.
 5. Remove advisory ignores when fixed.

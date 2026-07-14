@@ -2,6 +2,8 @@
 
 > Mise à jour de trajectoire (2026-07-12) : cet audit reste un instantané historique du 2026-06-30. Depuis, `apps/web` et le spike Leptos `apps/web-rs` ont été retirés du workspace. ADR 0002 fixe Dioxus comme cible durable ; la prochaine preuve UI doit être un parcours produit Dioxus runnable après stabilisation des contrats Portal. Tauri n'est pas un jalon actif.
 
+Note de statut (2026-07-14) : `RUSTSEC-2025-0057` a été retiré après upgrade `scraper 0.27.0` dans PR #79 ; `cargo tree -i fxhash` ne retourne aucun package et `cargo deny` / `cargo audit` sont verts. L'audit ci-dessous reste un snapshot historique.
+
 Date: 2026-06-30  
 Decision: **READY_FOR_IMPLEMENTATION_PLANNING** for scoped `CuratedItemExport` / Provider-BYOK hardening package.  
 Allowed work: planning tasks, Rust core implementation, and MVP Rust-first UI screens within scope.  

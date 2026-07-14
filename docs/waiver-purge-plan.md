@@ -2,13 +2,13 @@
 
 **Deadline:** 2026-09-30 (blocker for R2 maturity claim)
 
-Three RustSec advisories remain waived in `deny.toml`. This plan preserves the original inventory and records completed removals with concrete evidence.
+Two RustSec advisories remain waived in `deny.toml`. This plan preserves the original inventory and records completed removals with concrete evidence.
 
 ## Summary Table
 
 | Advisory          | Dependency Chain                        | Vulnerability                                 | Action                                                                                                     | Status  | Target     |
 | ----------------- | --------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------- | ---------- |
-| RUSTSEC-2025-0057 | fxhash → scraper                        | Hash DoS / collision attack                   | Upgrade scraper to v0.23+ (if available) or replace with alternative HTML parser                           | pending | 2026-08-15 |
+| RUSTSEC-2025-0057 | fxhash → scraper                        | Hash DoS / collision attack                   | Resolved by upgrading scraper to 0.27.0 in PR #79; no fxhash remains in the graph.                          | resolved | 2026-07-14 |
 | RUSTSEC-2026-0174 | http-types → async-stripe               | Protocol or security issue in http-types      | Upgrade async-stripe ≥ 0.40 (if available) or migrate to reqwest native HTTP                               | pending | 2026-08-15 |
 | RUSTSEC-2024-0384 | instant → async-stripe path dependency  | Timing or platform issue in instant crate     | Resolved by async-stripe upgrade or explicit instant patch                                                 | pending | 2026-08-15 |
 | RUSTSEC-2024-0436 | paste → validator, or UI dep chain      | Macro expansion or compile-time vulnerability | Upgraded validator to 0.20; `paste` absent from the locked graph                                          | resolved | 2026-07-09 |
@@ -29,6 +29,8 @@ Three RustSec advisories remain waived in `deny.toml`. This plan preserves the o
 - **Option B (fallback):** Replace scraper with alternative parsers (e.g., html5ever, select.rs with unicode-security review).
 
 **Action:** Check scraper changelog and crates.io for v0.23+; if available, upgrade Cargo.toml [workspace.dependencies] scraper entry. If not, evaluate alternative parsers by 2026-08-15.
+
+**Resolution (2026-07-14):** Completed in PR #79 by upgrading `scraper` to 0.27.0. `cargo tree -i fxhash` now returns no package, and `cargo deny` / `cargo audit` are green.
 
 **Owner:** ingest crate maintainer
 **Milestone:** 2026-08-15

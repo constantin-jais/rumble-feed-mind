@@ -183,6 +183,12 @@ async fn enqueue_webhook_cleanup(redis_url: &str) -> anyhow::Result<()> {
 mod tests {
     use super::*;
 
+    async fn scheduled_job_count(scheduler: &Scheduler) -> anyhow::Result<usize> {
+        let metadata = scheduler.cron.context.metadata_storage.clone();
+        let mut metadata = metadata.write().await;
+        Ok(metadata.list_next_ticks().await?.len())
+    }
+
     #[test]
     fn test_cron_expression_validity() {
         // These should parse without error
@@ -199,7 +205,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn scheduler_can_be_created_from_worker_config() {
+    async fn scheduler_registers_all_periodic_jobs_without_start() {
         let config = WorkerConfig {
             worker_database_url: "postgres://worker:worker@localhost/worker".to_string(),
             redis_url: "redis://localhost:6379/1".to_string(),
@@ -209,8 +215,39 @@ mod tests {
             master_key_version: 1,
         };
 
-        let scheduler = Scheduler::new(&config).await;
+        let scheduler = Scheduler::new(&config)
+            .await
+            .expect("scheduler should be created from worker config");
 
-        assert!(scheduler.is_ok());
+        assert_eq!(
+            scheduled_job_count(&scheduler)
+                .await
+                .expect("jobs should be readable"),
+            0
+        );
+
+        scheduler
+            .schedule_feed_refresh()
+            .await
+            .expect("feed refresh should register");
+        assert_eq!(scheduled_job_count(&scheduler).await.unwrap(), 1);
+
+        scheduler
+            .schedule_cleanup()
+            .await
+            .expect("cleanup should register");
+        assert_eq!(scheduled_job_count(&scheduler).await.unwrap(), 2);
+
+        scheduler
+            .schedule_dunning_check()
+            .await
+            .expect("dunning check should register");
+        assert_eq!(scheduled_job_count(&scheduler).await.unwrap(), 3);
+
+        scheduler
+            .schedule_webhook_cleanup()
+            .await
+            .expect("webhook cleanup should register");
+        assert_eq!(scheduled_job_count(&scheduler).await.unwrap(), 4);
     }
 }

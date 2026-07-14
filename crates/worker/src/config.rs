@@ -64,24 +64,34 @@ impl WorkerConfig {
 mod tests {
     use super::*;
     use std::env;
+    use std::sync::{Mutex, MutexGuard};
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     struct EnvGuard {
+        _lock: MutexGuard<'static, ()>,
         vars: Vec<(String, Option<String>)>,
     }
 
     impl EnvGuard {
-        fn set(pairs: &[(&str, &str)]) -> Self {
+        fn set(pairs: &[(&str, Option<&str>)]) -> Self {
+            let lock = ENV_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             let vars = pairs
                 .iter()
                 .map(|(key, value)| {
                     let key = (*key).to_string();
                     let previous = env::var(&key).ok();
-                    env::set_var(&key, value);
+                    match value {
+                        Some(value) => env::set_var(&key, value),
+                        None => env::remove_var(&key),
+                    }
                     (key, previous)
                 })
                 .collect();
 
-            Self { vars }
+            Self { _lock: lock, vars }
         }
     }
 
@@ -97,21 +107,24 @@ mod tests {
     }
 
     #[test]
-    fn worker_config_loads_defaults_from_environment() {
+    fn worker_config_loads_deterministic_values_from_environment() {
         let _env = EnvGuard::set(&[
             (
                 "WORKER_DATABASE_URL",
-                "postgres://worker:worker@localhost/worker",
+                Some("postgres://worker:worker@localhost/worker"),
             ),
-            ("REDIS_URL", "redis://localhost:6379/1"),
-            ("MASTER_KEY", "base64-fixture"),
+            ("REDIS_URL", Some("redis://localhost:6379/1")),
+            ("MASTER_KEY", Some("base64-fixture")),
+            ("CONCURRENT_FETCHES", Some("7")),
+            ("REFRESH_INTERVAL", Some("1")),
+            ("MASTER_KEY_VERSION", Some("9")),
         ]);
 
         let config = WorkerConfig::load().expect("worker config should load from environment");
 
-        assert_eq!(config.concurrent_fetches, 50);
-        assert_eq!(config.refresh_interval, 900);
-        assert_eq!(config.master_key_version, 1);
+        assert_eq!(config.concurrent_fetches, 7);
+        assert_eq!(config.refresh_interval, 1);
+        assert_eq!(config.master_key_version, 9);
         assert_eq!(
             config.worker_database_url,
             "postgres://worker:worker@localhost/worker"
