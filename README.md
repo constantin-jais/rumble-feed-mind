@@ -1,146 +1,74 @@
-> [!WARNING]
-> **Frozen on 2026-07-16 — reserved as the future home of Radar ([monorepo ADR-0008](https://github.com/libre-ai/libre-ai/blob/main/docs/adr/0008-multi-repo-target-topology-and-brand.md)).**
-> Radar is being rebuilt from locked contracts in the canonical base repository [`libre-ai/libre-ai`](https://github.com/libre-ai/libre-ai) (target: `apps/radar`). This repository will reopen as the real product repository when the owner activates it. Everything below describes the pre-freeze state and no longer reflects the current architecture or roadmap.
+**English** · [Français](README.fr.md)
 
-<p align="center">
-  <img src=".github/assets/repository-card.svg" alt="Libre AI Feed Radar, represented by a radar selecting explainable feed items." width="100%">
-</p>
+> [!NOTE]
+> **Reserved · future home of Radar** — rebuilt in the canonical base repository [`libre-ai/libre-ai`](https://github.com/libre-ai/libre-ai) ([multi-repo topology, ADR-0008](https://github.com/libre-ai/libre-ai/blob/main/docs/adr/0008-multi-repo-target-topology-and-brand.md)).
+> This repository will reopen as the real product repository when the owner activates it, consuming the base as a versioned dependency. The foundations described below are **being built now** — with links to the code that already exists.
 
-# Libre AI Feed Radar
+# Radar
 
-A local-first feed intelligence pipeline: OPML, RSS, Atom and JSON Feed into explainable curated exports.
+**Explainable feed selection and portable curation.** Subscribe to feeds (RSS, Atom, JSON Feed), apply visible deterministic rules to decide which items to keep, inspect why each decision was made rule-by-rule, and export a curated set you control. Workers fetch untrusted sources; no feed becomes trusted just by being ingested.
 
-[![Rust CI](https://github.com/libre-ai/feed-radar/actions/workflows/rust-ci.yml/badge.svg?branch=main)](https://github.com/libre-ai/feed-radar/actions/workflows/rust-ci.yml)
-[![Security](https://github.com/libre-ai/feed-radar/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/libre-ai/feed-radar/actions/workflows/security.yml)
-[![Contracts](https://github.com/libre-ai/feed-radar/actions/workflows/contracts.yml/badge.svg?branch=main)](https://github.com/libre-ai/feed-radar/actions/workflows/contracts.yml)
-[![Release](https://github.com/libre-ai/feed-radar/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/libre-ai/feed-radar/actions/workflows/release.yml)
+The canonical brief it answers: _"Help me read only what I chose, explain why"_ — surfacing **every** rule that matched or failed, with **zero** opaque ranking or algorithmic surprise. Built for local-first, for OPML/RSS/Atom/JSON Feed portability, and for replay: compare how the same items would have been decided under a different rule version without rewriting history.
 
-## Status
+## Why it's different
 
-| | |
-| --- | --- |
-| Maturity | **Dojo** — usable CLI/API proofs, incomplete product workflow |
-| Works today | local OPML parsing, bounded allowlisted HTTPS synchronization, rule evaluation, payload-minimized replay state, worker scheduler code with validated refresh-interval bounds and one-shot start guard, client-safe exports and one read-only Dioxus curated-review proof |
-| Not scale-ready | interactive import, hosted operations, multi-user guarantees, and production observability; hosted operations remain unproved |
-| Product UI proof | runnable Dioxus web slice over either the deterministic golden or a validated live-sync export, with pinned Client Kit provenance and Chromium/Firefox/WebKit mobile-width checks; not an API or release |
-| Historical IDs | `rumble-feed-mind` and `feedmind-*` remain technical package/contract IDs |
+- **Explainable decisions, not scores.** Every item kept or rejected is traced to the specific rules that matched or failed — you see the reasoning, rule by rule, every time.
+- **Portable curation.** Rules, subscriptions, and curated decisions export with provenance as standard OPML/JSON; you own the data you wrote.
+- **Replay without rewrite.** Compare how another rule version would have decided the same historical items without mutating the original decisions. History is append-only.
+- **Hostile-source safe.** Feed parsing is confined to a capability-free, deterministic engine; items are normalized and deduplicated before they reach the UI. Feeds stay untrusted until _you_ decide they matter.
+- **Fail-closed on bad sources.** Pre-network destination policy (SSRF gate) refuses loopback, private ranges, metadata endpoints, and DNS-rebinding tricks before a single socket opens.
 
-Canonical readiness cockpit: [`docs/product-readiness.md`](docs/product-readiness.md).
+## Status — spec-published, foundations under construction
 
-Temporary RustSec waivers documented in the repository must be removed or renewed before their stated expiry; they are not a production-readiness claim.
+Radar is being rebuilt from locked contracts. It is **not released yet**; the deterministic feed parser and rule evaluator come next, and the contract layer is already proven:
 
-## Quickstart without secrets
+| Foundation                                                         | State        | Evidence                                                                                                                                                            |
+| ------------------------------------------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Schema contracts v1/v2** — locked feed, rule, and export formats | ✅ built     | 8 JSON schemas + WIT world, 275-line normative PROFILE.md ([#40](https://github.com/libre-ai/libre-ai/pull/40)–[#46](https://github.com/libre-ai/libre-ai/pull/46)) |
+| **Golden-vector corpus** — 43 parse cases, security boundaries     | ✅ published | `contracts/fixtures/radar-engine-v2/{golden-vectors.v1.json, security-vectors.v1.json, adversarial/, positive/}`                                                    |
+| **Pre-network SSRF gate** — fail-closed destination policy         | ✅ built     | `src/security/destination-policy.ts` + tests, IPv4/IPv6 classification, DNS-rebinding defeat ([#161](https://github.com/libre-ai/libre-ai/pull/161))                |
+| **OpenAPI v2** — server and worker surface                         | ✅ specified | `contracts/openapi/radar.v2.yaml` + domain protocol in product brief                                                                                                |
+| Hostile feed parser — Rust/WASM component                          | ⏳ next      | WIT interface locked, container-ready, waiting for implementation                                                                                                   |
+| Deterministic rule evaluator — policy decision logic               | ⏳ next      | Specification in PROFILE.md; golden vectors target exact semantics                                                                                                  |
+| Network quarantine / worker lease model — bounded fetch            | ⏳ next      | Architecture sketched; idempotency, deduplication and credential isolation TBD                                                                                      |
+| Tenant API + UI cockpit — subscriptions, rules, decisions, export  | ⏳ wave 3–4  | Deferred: awaits parser + rule engine foundation                                                                                                                    |
 
-```bash
-cargo test --workspace
-cargo run -p feedmind-cli -- opml-summary --file examples/demo.opml
-cargo run -p feedmind-cli -- evaluate-rule \
-  --article examples/demo-article.json \
-  --rule examples/demo-rule.json
-cargo run -p feedmind-cli -- demo-curate \
-  --opml examples/demo.opml \
-  --article examples/demo-article.json \
-  --rule examples/demo-rule.json \
-  --output out/curated.json
-cargo run -p feedmind-cli -- validate-curated-export --file out/curated.json
-diff -u examples/expected-curated-export.json out/curated.json
-```
+This repository is `private` until Radar emerges from active development. **Benchmark target:** Inoreader ([inoreader.com](https://www.inoreader.com)) — reached through deterministic, auditable curation rather than algorithmic discovery.
 
-The optional `demo-curate-live` command uses the network and is intentionally excluded from deterministic CI.
+## How it works
 
-### Bounded live synchronization
+1. **Subscribe** — a user submits an HTTP(S) feed URL; the pre-network gate classifies the destination before any fetch; a preview scans the head of the feed.
+2. **Fetch & normalize** — workers fetch feeds in a quarantined environment and parse them into a canonical normalized schema (Atom, RSS, or JSON Feed all become the same contract).
+3. **Evaluate rules** — a deterministic, capability-free engine applies a versioned rule set to each item and records the decision and matched rules.
+4. **Inspect & replay** — users see the source, normalized fields, applied rules, and the decided outcome. They can replay against another rule version to compare decisions without mutating history.
+5. **Export & delete** — curated items, rules, and subscriptions export as JSON with provenance; users can delete sources and their retained data on demand.
 
-`sync-curated` imports an OPML set, validates every fetch and redirect against exact HTTPS hosts, caps sources/items/body size, deduplicates through a hash-only local state and removes stale output when no new signal exists:
+## Architecture — built from interoperable bricks
 
-```bash
-cargo run -p feedmind-cli -- sync-curated \
-  --opml examples/demo.opml \
-  --rule examples/demo-rule.json \
-  --output target/live/curated.json \
-  --state target/live/state.json \
-  --allow-host www.clever-cloud.com \
-  --allow-host clever.cloud \
-  --allow-host www.clever.cloud \
-  --allow-host blog.rust-lang.org
-```
+Radar is a product assembled from independently versioned bricks; each is usable and testable on its own, and the product is their composition (the multi-repo target of [ADR-0008](https://github.com/libre-ai/libre-ai/blob/main/docs/adr/0008-multi-repo-target-topology-and-brand.md)).
 
-Redirect hosts are intentionally not inferred. The command is local and does not make the product publicly available.
+| Brick                                           | Role                                        | Interface it exposes / consumes                                                                                                                                               |
+| ----------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`radar-engine`** (Rust → WASM component)      | The deterministic feed parser and evaluator | WIT world `radar-engine-v2`: `parse(feed-bytes, limits) → items`, `evaluate(items, rule-set) → decisions`                                                                     |
+| **`@libre-ai/destination-policy`** (TypeScript) | Pre-network fail-closed gate                | `isForbiddenDestination(ip)`, `evaluateFetchDestination(url)`, `checkRedirect(...)` → refusal enum or ✓                                                                       |
+| **`@libre-ai/web-platform`**                    | SSR / Bun BFF foundation                    | Request handler, authenticated session, tenant context                                                                                                                        |
+| **Contracts**                                   | Locked interoperability surface             | `feed-fetch.v1`, `curation-rule-set.v2`, `radar-normalized-{feed,item}.v1`, `radar-rule-evaluation.v1`, `curated-item-export.v2`, `radar.v2.yaml`, WIT world + golden vectors |
 
-## Local product journey
+The worker receives an attenuated authorization token scoped to one tenant and feed source; the engine holds no token, opens no network, and receives no raw response bytes — it works only on normalized inputs under declared byte/item/depth bounds.
 
-The Dioxus slice renders a validated `CuratedItemExport` through the portable `feedmind-sync` contract. Deterministic builds use the golden; a live proof can inject the output of `sync-curated` at build time. The browser displays the selected item, decision, reason, explanation, confidence and technical evidence without database, account, runtime network request or browser storage.
+## Where the work happens
 
-```bash
-python3 scripts/verify-design-system.py
-cargo test -p feedmind-sync -p feedmind-app
-cargo check -p feedmind-domain -p feedmind-sync -p feedmind-app \
-  --target wasm32-unknown-unknown --features feedmind-app/web
-./scripts/build-feedmind-app.sh
-npm ci --prefix e2e
-npm --prefix e2e test
-```
+All active development is in the base repository, under:
 
-The bundle carries the verified Libre IA Design System 2.0 CSS from the pinned Client Kit builder revision and rejects provenance drift, remote assets and failed contrast checks. Generate the dated networked traversal with `scripts/generate-live-radar-proof.sh` and explicit `--allow-host` arguments. This remains a local, read-only product proof: it does not establish interactive import, PWA, hosted, desktop, native mobile or multi-user availability.
+- `apps/radar` — the product host (API, worker orchestration, UI cockpit)
+- `contracts/schemas/` — feed-fetch, curation rules, normalized items and exports (v1/v2)
+- `contracts/wit/radar-engine-v2/` — the WIT world definition and normative PROFILE.md
+- `contracts/fixtures/radar-engine-v2/` — golden vectors and security corpus
+- `contracts/openapi/radar.v2.yaml` — API surface and worker endpoints
+- [`docs/apps/radar.md`](https://github.com/libre-ai/libre-ai/blob/main/docs/apps/radar.md) — the full product brief
 
-## PostgreSQL tenant isolation
-
-[ADR 0006](docs/adr/0006-tenant-context-and-row-level-security.md) is enforced below the adapters: 18 tenant tables enable and force RLS, API/CLI user work uses transaction-local `app.user_id`, authentication is restricted to fixed-`search_path` functions, and worker access is granted per table without ownership or `BYPASSRLS`.
-
-Local development provisions separate group and login roles on a fresh volume:
-
-```bash
-docker compose down -v # required once when upgrading the former single-role volume
-docker compose up -d
-
-export MIGRATION_DATABASE_URL='postgresql://feed_radar_migrator_dev:feed_radar_migrator_dev@localhost:5434/feedmind?options=-c%20role%3Dfeed_radar_owner'
-export DATABASE_URL='postgresql://feed_radar_app_dev:feed_radar_app_dev@localhost:5434/feedmind?options=-c%20role%3Dfeed_radar_app'
-export AUTH_DATABASE_URL='postgresql://feed_radar_auth_dev:feed_radar_auth_dev@localhost:5434/feedmind?options=-c%20role%3Dfeed_radar_auth'
-export WORKER_DATABASE_URL='postgresql://feed_radar_worker_dev:feed_radar_worker_dev@localhost:5434/feedmind?options=-c%20role%3Dfeed_radar_worker'
-
-cargo run -p feedmind-cli -- migrate
-```
-
-These credentials are local fixtures only. Production creates independent login principals outside product migrations and grants each exactly one NOLOGIN group role from [`scripts/postgres/provision-roles.sql`](scripts/postgres/provision-roles.sql). Existing single-role databases first run the explicit, product-object-only [`transfer-legacy-ownership.sql`](scripts/postgres/transfer-legacy-ownership.sql) as an administrator. API and worker configuration never receives `MIGRATION_DATABASE_URL`.
-
-## Database inspection gate
-
-[`db-security-manifest.json`](db-security-manifest.json) classifies every PostgreSQL table and records tenant derivation without granting waivers. Run the same ordered inspection used in CI:
-
-```bash
-mkdir -p target/db-inspect
-for migration in migrations/*.sql; do
-  cat "$migration"
-  printf '\n'
-done > target/db-inspect/schema.sql
-
-wrench-db-inspect run \
-  --manifest db-security-manifest.json \
-  --schema-dump target/db-inspect/schema.sql \
-  --profile protected_branch \
-  --report-json target/db-inspect/report.json
-```
-
-The protected-branch profile passes with zero parser errors, zero unknown state, complete enabled/forced RLS coverage and no waiver. CI downloads the immutable `wrench-db-inspect` Linux archive from the consolidated Proof Kit release `db-inspect-v0.1.0-alpha.7` and verifies SHA-256 before producing JSON and Markdown evidence.
-
-## Boundaries
-
-Feed Radar owns subscriptions, user-visible rules, selection decisions and explainable exports. It does not own generic ingestion infrastructure, durable memory, orchestration or shared client primitives. Integrations cross those boundaries through explicit contracts.
-
-## Architecture
-
-The Rust workspace separates domain, ingestion, rules, provider traits, sync, storage ports, API, workers and CLI. UI targets remain targets until backed by runnable evidence. ADR 0002 makes Dioxus the durable target; the removed Leptos spike remains historical evidence in [`docs/spikes/leptos-web-shell.md`](docs/spikes/leptos-web-shell.md), and desktop packaging requires a later, evidence-backed decision.
-
-- [`docs/refactor-plan.md`](docs/refactor-plan.md)
-- [`docs/launch-target.md`](docs/launch-target.md)
-- [`docs/adr/0002-rust-first-product-stack.md`](docs/adr/0002-rust-first-product-stack.md)
-
-## Contributing
-
-- [Contribution guide](CONTRIBUTING.md)
-- [Roadmap](ROADMAP.md)
-- [Security policy](SECURITY.md)
-- [Agent guidance](AGENTS.md)
+To follow progress or contribute, open issues and pull requests in [`libre-ai/libre-ai`](https://github.com/libre-ai/libre-ai). This repository stays reserved until activation.
 
 ## License
 
-[MIT](LICENSE).
+EUPL-1.2.
