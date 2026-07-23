@@ -33,7 +33,7 @@ Radar est reconstruit à partir de contrats verrouillés. Il **n'est pas encore 
 | Quarantaine réseau / modèle de bail travailleur — récupération bornée       | ⏳ suite      | Architecture esquissée ; idempotence, déduplication et isolation des credentials à définir                                                                           |
 | API locataire + cockpit UI — abonnements, règles, décisions, export         | ⏳ vague 3–4  | Différé : en attente de fondation analyseur + moteur de règles                                                                                                       |
 
-Ce dépôt est une réserve publique, volontairement sans code produit jusqu'à l'activation (vague 4). **Cible de référence :** Inoreader ([inoreader.com](https://www.inoreader.com)) — atteinte par une curation déterministe et auditable plutôt que par la découverte algorithmique.
+Ce dépôt est une réserve publique ; l'implémentation legacy qu'il porte encore est gelée pour référence, et la reconstruction se passe dans le dépôt de base jusqu'à l'activation (vague 4). **Cible de référence :** Inoreader ([inoreader.com](https://www.inoreader.com)) — atteinte par une curation déterministe et auditable plutôt que par la découverte algorithmique.
 
 ## Comment ça fonctionne
 
