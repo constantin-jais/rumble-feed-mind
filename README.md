@@ -33,7 +33,7 @@ Radar is being rebuilt from locked contracts. It is **not released yet**; the de
 | Network quarantine / worker lease model — bounded fetch            | ⏳ next      | Architecture sketched; idempotency, deduplication and credential isolation TBD                                                                                      |
 | Tenant API + UI cockpit — subscriptions, rules, decisions, export  | ⏳ wave 3–4  | Deferred: awaits parser + rule engine foundation                                                                                                                    |
 
-This repository is `private` until Radar emerges from active development. **Benchmark target:** Inoreader ([inoreader.com](https://www.inoreader.com)) — reached through deterministic, auditable curation rather than algorithmic discovery.
+This repository is a public reserved home, intentionally without product code until activation (wave 4). **Benchmark target:** Inoreader ([inoreader.com](https://www.inoreader.com)) — reached through deterministic, auditable curation rather than algorithmic discovery.
 
 ## How it works
 
